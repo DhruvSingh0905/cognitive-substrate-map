@@ -9,3 +9,4 @@ __pycache__/
 *.pyc
 .playwright-mcp/
 .DS_Store
+cognitive_map/output/
