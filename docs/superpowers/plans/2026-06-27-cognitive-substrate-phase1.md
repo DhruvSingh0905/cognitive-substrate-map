@@ -570,6 +570,111 @@ git commit -m "feat(cogmap): Phase 1 build orchestrator + export"
 
 ---
 
+### Task 7: Dual report — markdown + interactive HTML (standing rule)
+
+Per the user's standing preference: any report-to-verify gets both a markdown file AND a visually appealing interactive HTML. The substrate is a pathway network, so the HTML is an interactive pyvis graph (drag/zoom/hover), not a static table.
+
+**Files:**
+- Create: `cognitive_map/report.py`
+- Create: `cognitive_map/tests/test_report.py`
+
+**Interfaces:**
+- Consumes: `cognitive_map/output/nodes.csv`, `edges.csv` from Task 6.
+- Produces: `build_html(...) -> Path` writing `output/substrate.html`; `build_markdown(...) -> Path` writing `output/substrate_report.md`.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# cognitive_map/tests/test_report.py
+from cognitive_map.build import main as build_main
+from cognitive_map.report import build_html, build_markdown
+
+def test_reports_render_and_contain_genes():
+    build_main()                       # ensure nodes.csv / edges.csv exist
+    html = build_html()
+    md = build_markdown()
+    assert html.exists() and md.exists()
+    assert "GRIN2B" in html.read_text()
+    assert "brain-enrichment" in md.read_text().lower()
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `.venv/bin/pytest cognitive_map/tests/test_report.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cognitive_map.report'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+```python
+# cognitive_map/report.py
+"""Dual report: markdown + interactive pyvis HTML of the built substrate."""
+from pathlib import Path
+import pandas as pd
+from pyvis.network import Network
+
+OUT = Path(__file__).parent / "output"
+COLORS = {"intervention": "#4e79a7", "trap": "#e15759",
+          "readout": "#f28e2b", "expanded": "#bab0ac"}
+
+def build_html(nodes_csv=OUT / "nodes.csv", edges_csv=OUT / "edges.csv",
+               out_html=OUT / "substrate.html") -> Path:
+    nodes = pd.read_csv(nodes_csv)
+    edges = pd.read_csv(edges_csv)
+    net = Network(height="800px", width="100%", bgcolor="#ffffff",
+                  font_color="#222", notebook=False)
+    for _, r in nodes.iterrows():
+        be = float(r["brain_enrichment"])
+        net.add_node(str(r["gene"]), label=str(r["gene"]),
+                     color=COLORS.get(r["klass"], "#999999"),
+                     size=10 + 40 * be,
+                     title=(f"{r['gene']} | {r['klass']} | brain {be:.2f} | "
+                            f"{int(r['n_diseases'])} diseases | promisc {int(r['promiscuity'])}"))
+    present = set(nodes["gene"].astype(str))
+    for _, e in edges.iterrows():
+        s, t = str(e["source"]), str(e["target"])
+        if s in present and t in present:
+            net.add_edge(s, t, color="#cccccc")
+    net.force_atlas_2based()
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    net.save_graph(str(out_html))
+    return out_html
+
+def build_markdown(nodes_csv=OUT / "nodes.csv",
+                   out_md=OUT / "substrate_report.md") -> Path:
+    nodes = pd.read_csv(nodes_csv)
+    lines = ["# Cognitive Substrate — Phase 1 Report", ""]
+    lines.append(f"**Total nodes:** {len(nodes)}")
+    for k, n in nodes["klass"].value_counts().items():
+        lines.append(f"- {k}: {n}")
+    lines += ["", "## Top 20 by brain-enrichment", "",
+              "| gene | class | brain | diseases | promisc |",
+              "|---|---|---|---|---|"]
+    for _, r in nodes.head(20).iterrows():
+        lines.append(f"| {r['gene']} | {r['klass']} | {r['brain_enrichment']} "
+                     f"| {int(r['n_diseases'])} | {int(r['promiscuity'])} |")
+    out_md.write_text("\n".join(lines) + "\n")
+    return out_md
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `.venv/bin/pytest cognitive_map/tests/test_report.py -v`
+Expected: PASS
+
+- [ ] **Step 5: Open the HTML and eyeball it**
+
+Run: `open cognitive_map/output/substrate.html`
+Expected: an interactive network — intervention nodes blue, trap (developmental) red, readout orange; node size ∝ brain-enrichment; hover shows the attributes.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add cognitive_map/report.py cognitive_map/tests/test_report.py
+git commit -m "feat(cogmap): dual md + interactive HTML report"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage:**
