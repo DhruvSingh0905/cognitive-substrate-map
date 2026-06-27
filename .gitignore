@@ -1,0 +1,11 @@
+# large data, DB store, and environments — never commit
+data/
+neo4j/
+.venv/
+venv/
+
+# python / tooling cruft
+__pycache__/
+*.pyc
+.playwright-mcp/
+.DS_Store
