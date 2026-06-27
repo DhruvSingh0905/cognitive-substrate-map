@@ -108,6 +108,16 @@ Every weight is tagged `magnitude_status ∈ {quantified, sign-only, unknown}`:
 
 **Output:** brain-scoped substrate graph with graph-derived attributes + empty human-rigor columns.
 
+### Phase 1b — Benchmark against external graphs, then gap-fill
+
+Build ours first (Phase 1), then compare against established resources — the diff *is* the gap list (computed, not guessed):
+
+- **Brain-specificity:** [HumanBase/GIANT](https://hb.flatironinstitute.org/) brain network, [PsychENCODE](https://www.psychencode.org/). Does our brain-enrichment + seed set recover their high-confidence brain genes? What brain-canonical genes do they have that we lack? → add the misses to seeds.
+- **Sign/direction:** [OmniPath](https://omnipathdb.org/), [SIGNOR](https://signor.uniroma2.it/). Join to recover activation/inhibition signs for our edges — **fills the Phase 2 directionality need with curated causality instead of hand-curation.** (Magnitude/% still mostly absent → `magnitude_status` honesty still holds.)
+- **Neuro disease/target:** [AlzKB](https://alzkb.ai/), [AGORA](https://agora.adknowledgeportal.org/). Cross-check our readout/disease nodes + target evidence.
+
+Output: an overlap/gap report (ours ∩ theirs, ours − theirs, theirs − ours) → add missing canonical nodes, adopt OmniPath/SIGNOR signs. This report is a report-to-verify → md + interactive HTML per the standing rule.
+
 ### Phase 2 — Research pass (literature; the slow rigor)
 
 Fill `sign`, `magnitude` (% where real, else `sign-only`), `confidence`, and the real `tradeoff` per node/edge, with citations. This is where the project's value lives. LLM-assisted curation is allowed but every claim is cited and adversarially checked; uncited magnitude = `sign-only` at most.
