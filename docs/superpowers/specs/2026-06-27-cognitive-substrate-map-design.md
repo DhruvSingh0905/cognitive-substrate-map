@@ -40,7 +40,11 @@ Validation (run 2026-06-27): GRIN2B 52%, BDNF 34%, DRD2 26%, CHRNA7 21% (brain-c
 
 - 628 brain-related anatomy nodes exist; 24,829 genes carry expression edges.
 - **Refinement needed:** the brain-anatomy term list currently includes cross-species/developmental terms (zebrafish "neural keel/rod"). Phase 1 curates it to relevant adult-human brain regions.
-- `brain_enrichment` is both a **node attribute** and a **filter** (threshold/downweight below a cutoff, e.g., retain ≥ ~15–20%, tunable).
+- `brain_enrichment` is both a **node attribute** and a **filter**. Default: **soft downweight** by enrichment (keep everything, weight by score) with a reference band ~15–20% separating brain-canonical from systemic — not a hard cutoff, so borderline nodes (COMT ~17%) stay visible.
+
+### Known limitation — regulation crosses the boundary
+
+`brain_enrichment` scores where a gene is *expressed*, not where it is *controlled*. Even brain-enriched genes are regulated by body-wide signaling (hormones, metabolic and immune signals crossing the BBB). So a brain-localized node is **not** a brain-contained *intervention* — its upstream control may be systemic. This is the pleiotropy problem one level up (regulatory, not expression), and another reason the Phase 3 sim is a toy. Recorded as a per-node `upstream_systemic` flag in Phase 2 where known.
 
 ---
 
@@ -89,8 +93,14 @@ Every weight is tagged `magnitude_status ∈ {quantified, sign-only, unknown}`:
 ### Phase 1 — Build the subgraph (mechanical; PrimeKG)
 
 1. **Seed** the brain node set:
-   - Curated canonical cognitive genes by system: cholinergic (CHRNA7, ACHE, CHAT…), glutamatergic (GRIN2A/B, GRIA*, GRM*…), dopaminergic (DRD1–5, COMT, TH, SLC6A3…), serotonergic, GABAergic; plasticity (BDNF, NTRK2, CREB1, MTOR, ARC, CAMK2A…); neuroinflammation (TREM2, IL1B, TNF, NFKB1…); clearance/proteostasis (AQP4, autophagy genes, APP, MAPT); metabolic (AMPK complex…).
+   - Curated canonical cognitive genes by system:
+     - *neurotransmitter*: cholinergic (CHRNA7, ACHE, CHAT…), glutamatergic (GRIN2A/B, GRIA*, GRM*…), dopaminergic (DRD1–5, COMT, TH, SLC6A3…), serotonergic, GABAergic
+     - *synaptic-plasticity cascades* (the core knobs): cAMP/PKA/CREB (ADCY1, PRKACA, CREB1, CREBBP), immediate-early genes (FOS, JUN, EGR1, ARC, NR4A1), Rho/Ras GTPases (RHOA, RAC1, CDC42, HRAS, RASGRF1, KALRN), plus BDNF, NTRK2, MTOR, CAMK2A
+     - *neuroinflammation*: TREM2, IL1B, TNF, NFKB1…
+     - *clearance/proteostasis*: AQP4, autophagy genes, APP, MAPT
+     - *metabolic*: AMPK complex…
    - + PrimeKG `disease_protein` from cognitive diseases (Alzheimer's, cognitive decline, …) and `bioprocess_protein` from cognitive GO terms (learning, memory, cognition, synaptic plasticity, LTP).
+   - **Cascade triage** (applying the framing discipline): seed the *synaptic/plasticity* cascades as intervention nodes. **Developmental patterning cascades (Notch, Wnt/β-catenin, Shh) are out of intervention scope** — they build the brain and are load-bearing/oncogenic if perturbed in the adult; they go in the tradeoff/"do-not-touch" column, not as targets. **Disease cascades (amyloid, MeCP2→BDNF, ASD networks) are reference failure-modes / readouts**, not knobs.
 2. **Expand** 1 hop via PPI / shared-pathway, **promiscuity-filtered** (drop ALB/ABCB1/CYP-grade hubs).
 3. **Brain-scope:** compute `brain_enrichment`, downweight/threshold systemic nodes.
 4. **Attach** graph-derived columns (§3) and raw candidate edges (unsigned: PPI, pathway co-membership, drug→target) for Phase 2 to sign/weight.
