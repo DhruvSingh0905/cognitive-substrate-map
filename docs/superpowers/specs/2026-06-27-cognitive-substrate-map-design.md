@@ -84,6 +84,8 @@ Every weight is tagged `magnitude_status ∈ {quantified, sign-only, unknown}`:
 
 ## 4. The three phases
 
+> **Each phase is its own implementation plan.** We plan and build **Phase 1 first**; Phases 2 and 3 get their own spec→plan cycles once Phase 1 exists and we've seen the real node set. Do not try to plan all three at once.
+
 ### Phase 1 — Build the subgraph (mechanical; PrimeKG)
 
 1. **Seed** the brain node set:
