@@ -16,7 +16,12 @@ def is_brain_anatomy(name: str) -> bool:
     return bool(_BRAIN.search(name or ""))
 
 
-def brain_enrichment(graph: Graph, genes: list[str]) -> dict[str, float]:
+def brain_enrichment_detailed(graph: Graph, genes: list[str]) -> dict[str, dict]:
+    """Per gene: {'enrichment': fraction brain tissues, 'support': total tissues}.
+
+    `support` matters: a gene seen in 1 (brain) tissue scores 1.0 but is noise —
+    callers should require support >= 5 before trusting the enrichment.
+    """
     rows = graph.query(
         "MATCH (g:gene_protein)-[:anatomy_protein_present]-(a:anatomy) "
         "WHERE g.node_name IN $genes "
@@ -29,4 +34,9 @@ def brain_enrichment(graph: Graph, genes: list[str]) -> dict[str, float]:
         total[r["gene"]] += 1
         if is_brain_anatomy(r["tissue"]):
             brain[r["gene"]] += 1
-    return {g: (brain[g] / total[g] if total[g] else 0.0) for g in genes}
+    return {g: {"enrichment": (brain[g] / total[g] if total[g] else 0.0),
+                "support": total[g]} for g in genes}
+
+
+def brain_enrichment(graph: Graph, genes: list[str]) -> dict[str, float]:
+    return {g: d["enrichment"] for g, d in brain_enrichment_detailed(graph, genes).items()}

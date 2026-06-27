@@ -26,6 +26,8 @@ def test_seed_membership_and_classification():
     assert classify("NOTCH1") == "trap"
     assert classify("MECP2") == "readout"
     assert classify("GRIN2B") == "intervention"
+    assert classify("INSR") == "input"          # BBB/systemic interface
+    assert classify("ADORA2A") == "input"
     assert classify("ZZZ_UNKNOWN") == "expanded"
 
 
@@ -58,13 +60,21 @@ def test_expansion_filters_hubs_and_excludes_seeds(g):
     assert len(neighbors) > 0
 
 
-def test_build_produces_scoped_table(g):
+def test_build_produces_bounded_scoped_table(g):
     df = build_substrate(g)
     assert (df["gene"] == "GRIN2B").any()
-    for col in ["gene", "klass", "brain_enrichment", "n_diseases",
+    for col in ["gene", "klass", "brain_enrichment", "tissue_support", "n_diseases",
                 "promiscuity", "direction", "tradeoff", "evidence_grade"]:
         assert col in df.columns
-    grin = df.loc[df["gene"] == "GRIN2B", "brain_enrichment"].iloc[0]
-    assert grin > df["brain_enrichment"].median()
+    # bounded: the explosion (5,246) is gone — seeds + capped expansion
+    assert len(df) < 400
+    # all four layers present
+    assert (df["klass"] == "intervention").any()
+    assert (df["klass"] == "input").any()
+    assert (df["klass"] == "readout").any()
+    # no spurious high-enrichment, low-support nodes survived expansion
+    exp = df[df["klass"] == "expanded"]
+    assert (exp["tissue_support"] >= 5).all()
+    # Phase-2 rigor columns still empty
     assert df["direction"].isna().all()
     assert df["tradeoff"].isna().all()

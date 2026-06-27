@@ -17,6 +17,16 @@ NEUROINFLAMMATION = ["TREM2", "IL1B", "TNF", "NFKB1", "NLRP3", "CX3CR1"]
 CLEARANCE         = ["AQP4", "SQSTM1", "BECN1"]
 METABOLIC         = ["PRKAA1", "PRKAA2", "PRKAB1", "PRKAG1"]
 
+# BBB / systemic interface — how body-wide state (glucose, arousal, stress, hormones)
+# drives the brain core. Modeled as DRIVERS, not clean knobs (systemic, high-pleiotropy).
+SYSTEMIC_INPUT = {
+    "fuel_transport":    ["SLC2A1", "SLC7A5"],              # GLUT1, LAT1
+    "metabolic_hormone": ["INSR", "LEPR", "THRA", "THRB"],  # insulin/leptin/thyroid receptors
+    "catecholamine":     ["ADRB1", "ADRB2", "ADRA2A"],      # epi/norepi
+    "steroid":           ["AR", "ESR1", "ESR2", "NR3C1"],   # testosterone/estrogen/cortisol
+    "adenosine":         ["ADORA2A"],                       # caffeine axis
+}
+
 # Out of intervention scope — load-bearing/oncogenic if perturbed in the adult brain.
 DEVELOPMENTAL_TRAP = ["NOTCH1", "NOTCH2", "CTNNB1", "WNT3A", "SHH", "GLI1", "HES1", "DLL1"]
 # Disease-cascade reference / readouts, not knobs.
@@ -32,11 +42,20 @@ def intervention_seeds() -> set[str]:
     return genes
 
 
+def input_seeds() -> set[str]:
+    genes: set[str] = set()
+    for names in SYSTEMIC_INPUT.values():
+        genes.update(names)
+    return genes
+
+
 def classify(gene: str) -> str:
     if gene in DEVELOPMENTAL_TRAP:
         return "trap"
     if gene in DISEASE_READOUT:
         return "readout"
+    if gene in input_seeds():
+        return "input"
     if gene in intervention_seeds():
         return "intervention"
     return "expanded"
