@@ -58,6 +58,35 @@ def build_core_html(nodes_csv=OUT / "nodes.csv", edges_csv=OUT / "edges.csv",
     return out_html
 
 
+def build_regulatory_html(nodes_csv=OUT / "nodes.csv",
+                          reg_csv=OUT / "edges_regulatory.csv",
+                          out_html=OUT / "regulatory.html",
+                          classes=("intervention", "input", "readout", "trap")) -> Path:
+    """Directed, signed regulatory network (green=activation, red=inhibition)."""
+    nodes = pd.read_csv(nodes_csv)
+    core = nodes[nodes["klass"].isin(classes)]
+    coreset = set(core["gene"].astype(str))
+    reg = pd.read_csv(reg_csv)
+    reg = reg[reg["source"].isin(coreset) & reg["target"].isin(coreset)]
+    present = set(reg["source"]) | set(reg["target"])
+
+    net = Network(height="860px", width="100%", bgcolor="#0f1115",
+                  font_color="#e8eaed", directed=True, notebook=False)
+    net.barnes_hut(gravity=-9000, spring_length=130)
+    for _, r in core[core["gene"].isin(present)].iterrows():
+        g = str(r["gene"])
+        net.add_node(g, label=g, color=COLORS.get(r["klass"], "#999999"),
+                     size=14, title=f"{g} | {r['klass']}")
+    sign_color = {1: "#4caf7d", -1: "#e15759", 0: "#7b8494"}
+    for _, e in reg.iterrows():
+        net.add_edge(str(e["source"]), str(e["target"]),
+                     color=sign_color.get(int(e["sign"]), "#7b8494"), arrows="to",
+                     title=f"sign={int(e['sign'])} · {int(e['n_sources'])} sources")
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    net.save_graph(str(out_html))
+    return out_html
+
+
 def build_markdown(nodes_csv=OUT / "nodes.csv",
                    out_md=OUT / "substrate_report.md") -> Path:
     nodes = pd.read_csv(nodes_csv)
