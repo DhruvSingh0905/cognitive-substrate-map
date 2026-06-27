@@ -87,6 +87,54 @@ def build_regulatory_html(nodes_csv=OUT / "nodes.csv",
     return out_html
 
 
+CASCADE = ["BDNF", "NTRK2", "CREB1", "CREBBP", "PRKACA", "ADCY1", "CAMK2A",
+           "JUN", "FOS", "ARC", "EGR1", "NFKB1", "RELA", "GRIN2B",
+           "ADORA1", "ADORA2A", "ADRB2", "NR3C1"]
+CASCADE_DRUGS = ["Caffeine", "Carbamazepine", "Lamotrigine", "Fluoxetine", "Ketamine"]
+STATUS_W = {"literature·in-brain": 6, "literature·directional": 3,
+            "IUPHAR·potency": 3, "sign-only": 1.5}
+
+
+def build_cascade_html(nodes_csv=OUT / "nodes.csv", reg_csv=OUT / "edges_regulatory.csv",
+                       out_html=OUT / "cascade_magnitudes.html") -> Path:
+    """Interactive learning-cascade view with REAL magnitudes labelled on the edges."""
+    from cognitive_map.magnitudes import drug_magnitudes
+    nodes = pd.read_csv(nodes_csv)
+    klass = dict(zip(nodes["gene"].astype(str), nodes["klass"]))
+    cset = set(CASCADE)
+
+    net = Network(height="860px", width="100%", bgcolor="#0f1115",
+                  font_color="#e8eaed", directed=True, notebook=False)
+    net.barnes_hut(gravity=-12000, spring_length=160)
+
+    for g in CASCADE:
+        net.add_node(g, label=g, color=COLORS.get(klass.get(g, "expanded"), "#999999"),
+                     size=18, title=f"{g} | {klass.get(g,'?')}")
+    for d in CASCADE_DRUGS:
+        net.add_node(d, label=d, color="#e8c468", shape="diamond", size=16, title=f"{d} (drug)")
+
+    # regulatory edges among cascade genes (sign from OmniPath)
+    reg = pd.read_csv(reg_csv)
+    reg = reg[reg["source"].isin(cset) & reg["target"].isin(cset)]
+    sc = {1: "#4caf7d", -1: "#e15759", 0: "#7b8494"}
+    for _, e in reg.iterrows():
+        s = int(e["sign"])
+        net.add_edge(str(e["source"]), str(e["target"]), arrows="to",
+                     color=sc[s], width=STATUS_W["sign-only"],
+                     label={1: "+", -1: "−", 0: "?"}[s],
+                     title=f"OmniPath · sign={s} · magnitude: sign-only (no number) · {int(e['n_sources'])} sources")
+
+    # drug -> gene magnitudes (literature gold + IUPHAR potency)
+    for m in drug_magnitudes(CASCADE_DRUGS):
+        if m["gene"] in cset:
+            net.add_edge(m["drug"], m["gene"], arrows="to", color="#f0a23c",
+                         width=STATUS_W.get(m["status"], 3), label=m["value"],
+                         title=f"{m['drug']} → {m['gene']}  =  {m['value']}\n[{m['status']}]  {m['source']}")
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    net.save_graph(str(out_html))
+    return out_html
+
+
 def build_markdown(nodes_csv=OUT / "nodes.csv",
                    out_md=OUT / "substrate_report.md") -> Path:
     nodes = pd.read_csv(nodes_csv)
