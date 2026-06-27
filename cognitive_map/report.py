@@ -32,6 +32,32 @@ def build_html(nodes_csv=OUT / "nodes.csv", edges_csv=OUT / "edges.csv",
     return out_html
 
 
+def build_core_html(nodes_csv=OUT / "nodes.csv", edges_csv=OUT / "edges.csv",
+                    out_html=OUT / "core.html",
+                    classes=("intervention", "input", "readout", "trap")) -> Path:
+    """Render ONLY the curated core (no 'expanded' flood) — loads in any browser."""
+    nodes = pd.read_csv(nodes_csv)
+    core = nodes[nodes["klass"].isin(classes)]
+    coreset = set(core["gene"].astype(str))
+    edges = pd.read_csv(edges_csv)
+    net = Network(height="850px", width="100%", bgcolor="#0f1115",
+                  font_color="#e8eaed", notebook=False)
+    net.barnes_hut(gravity=-8000, spring_length=120)
+    for _, r in core.iterrows():
+        be = float(r["brain_enrichment"])
+        net.add_node(str(r["gene"]), label=str(r["gene"]),
+                     color=COLORS.get(r["klass"], "#999999"), size=12 + 35 * be,
+                     title=(f"{r['gene']} | {r['klass']} | brain {be:.2f} | "
+                            f"{int(r['n_diseases'])} diseases | promisc {int(r['promiscuity'])}"))
+    for _, e in edges.iterrows():
+        s, t = str(e["source"]), str(e["target"])
+        if s in coreset and t in coreset:
+            net.add_edge(s, t, color="#33384a")
+    out_html.parent.mkdir(parents=True, exist_ok=True)
+    net.save_graph(str(out_html))
+    return out_html
+
+
 def build_markdown(nodes_csv=OUT / "nodes.csv",
                    out_md=OUT / "substrate_report.md") -> Path:
     nodes = pd.read_csv(nodes_csv)
