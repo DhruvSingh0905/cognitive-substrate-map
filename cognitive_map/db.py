@@ -1,8 +1,11 @@
 """Thin Neo4j wrapper for the cognitive-substrate build (PrimeKG)."""
+import os
+
 from neo4j import GraphDatabase
 
-URI = "bolt://localhost:7687"
-AUTH = ("neo4j", "primekg123")
+# Local dev defaults; override via env for anything non-localhost.
+URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+AUTH = ("neo4j", os.environ.get("NEO4J_PASSWORD", "primekg123"))
 
 
 class Graph:

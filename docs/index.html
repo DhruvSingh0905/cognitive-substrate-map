@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cognitive Substrate Map</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] },
+                     svg: { fontCache: 'global' } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--panel2:#1d212b;--ink:#e8eaed;--muted:#9aa3b2;--line:#2a2f3a;
+    --red:#e15759;--orange:#f0a23c;--green:#4caf7d}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0f1115,#0c0e12);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:34px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:.2px}
+  .tag{color:var(--muted);margin:0 0 10px;font-size:15px}
+  h2{font-size:17px;margin:32px 0 12px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  h3{font-size:14px;margin:20px 0 6px;color:#c7cedb}
+  p{color:#d4dae4} code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:13px}
+  .eq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 20px;margin:12px 0;overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+  td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left} th{color:var(--muted);font-weight:600}
+  .mono{font-family:ui-monospace,Menlo,monospace} .pos{color:var(--green)} .neg{color:var(--red)} .ok{color:var(--green);font-weight:600}
+  .next{color:var(--muted);font-weight:400}
+  .note{background:rgba(240,162,60,.08);border-left:3px solid var(--orange);border-radius:8px;padding:10px 16px;margin:14px 0;font-size:14px;color:#e6d9c4}
+</style></head>
+<body><div class="wrap">
+
+  <h1>Cognitive Substrate Map</h1>
+  <p class="tag">A brain-scoped, directed, signed regulatory network of cognition — used to ask which gene
+  up/down-regulations move the brain toward a learning-optimal state at minimal systemic cost.</p>
+
+  <h2>The math</h2>
+
+  <h3>1 · Substrate → signed operator</h3>
+  <p>Each edge carries a direction and a sign ($+1$ activation / $-1$ inhibition), oriented so influence flows
+  <i>source → target</i>:</p>
+  <div class="eq">$$W_{ij} = \operatorname{sign}(j \to i)$$</div>
+  <p>Column-normalize by each regulator's out-strength — the Personalized-PageRank transition. This hub-damps
+  promiscuous regulators and bounds the spectrum, so the propagation below converges:</p>
+  <div class="eq">$$\hat{W}_{ij} = \frac{W_{ij}}{\sum_k \lvert W_{kj}\rvert}, \qquad \rho(\hat{W}) \le 1$$</div>
+
+  <h3>2 · Propagation to steady state (APPNP)</h3>
+  <p>Perturb a gene with source vector $p$ and solve the fixed point that re-injects the source (weight $\alpha$)
+  and diffuses the rest — the steady state under the 200-node feedback loop:</p>
+  <div class="eq">$$x^{*} = \alpha\,p + (1-\alpha)\,\hat{W}x^{*} \;\;\Longrightarrow\;\;
+    x^{*} = \alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p = \alpha\sum_{k\ge 0}(1-\alpha)^k\hat{W}^k p$$</div>
+  <p>The $(1-\alpha)^k$ decay damps deep hops (the over-smoothing guard); $x^{*}$ is each node's deviation from
+  baseline.</p>
+
+  <h3>3 · Scoring — closeness to the target state <span class="next">(next)</span></h3>
+  <p>Benefit rewards <i>movement toward</i> each target $d_i$ (overshoot flips negative — the inverted-U); cost
+  prices intervention effort + systemic collateral:</p>
+  <div class="eq">$$b_i = \lvert d_i\rvert - \lvert x^{*}_i - d_i\rvert, \qquad
+    B(p)=\sum_i w_i\,b_i, \qquad C(p)=\lVert p\rVert_1 + \gamma\!\!\sum_{j\,\in\,\text{off-target}}\!\!\lvert x^{*}_j\rvert$$</div>
+
+  <h3>4 · Uncertainty band <span class="next">(next)</span></h3>
+  <p>Sample the uncertain inputs (confidence weights, sign-only magnitudes) $M$ times → a coverage band, not a point.
+  Sobol indices $S_{T_i}$ say which input drives the band.</p>
+
+  <h3>5 · Optimization <span class="next">(next)</span></h3>
+  <p>Trace the benefit-vs-cost Pareto front by ε-constraint (exact, since the system is small):</p>
+  <div class="eq">$$\max_{p}\; B(p) \quad\text{s.t.}\quad C(p) \le \varepsilon, \qquad \varepsilon\ \text{swept}$$</div>
+
+  <h2>Results</h2>
+
+  <h3>Substrate</h3>
+  <p>280 nodes in four layers — 70 intervention (knobs), 15 input, 6 readout, 2 trap, 187 bounded expansion — wired by
+  3,912 directed edges, <b>2,871 signed</b> (2,253 activating, 618 inhibitory). Fully connected, with a 200-node
+  strongly-connected feedback core.</p>
+
+  <h3>Controllability</h3>
+  <p>All 280 nodes are reachable from the druggable set. Arbitrary-state control would need 81 independent drivers
+  (~35 druggable), but <b>target-control of the cognitive core is plausible</b> — all the optimizer needs.</p>
+
+  <h3>Propagation — verified against the raw edge signs</h3>
+  <p>Perturb one gene $+1$, solve $x^{*}$, check against signs read straight from the edge table (not the model). At
+  $\alpha=0.15$, $\rho(\hat{W})=0.544$:</p>
+  <table>
+    <tr><th>perturb</th><th>→ target</th><th>edge sign</th><th>observed $x^{*}$</th><th>check</th></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>BDNF</td><td>+1</td><td class="mono pos">+0.0030</td><td class="ok">✓</td></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>EGR1</td><td>+1</td><td class="mono pos">+0.0030</td><td class="ok">✓</td></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>TH</td><td>+1</td><td class="mono pos">+0.0035</td><td class="ok">✓</td></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>JUN</td><td>−1</td><td class="mono neg">−0.0027</td><td class="ok">✓ flip</td></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>NTRK2</td><td>+1→+1</td><td class="mono pos">+0.0080</td><td class="ok">✓ net</td></tr>
+    <tr><td class="mono">GSK3B ↑</td><td>CREB1</td><td>−1</td><td class="mono neg">−0.0041</td><td class="ok">✓ inhibition</td></tr>
+    <tr><td class="mono">AKT1 ↑</td><td>CHUK</td><td>+1</td><td class="mono pos">+0.0046</td><td class="ok">✓</td></tr>
+    <tr><td class="mono">AKT1 ↑</td><td>NFKB1</td><td>+1→−1</td><td class="mono neg">−0.0008</td><td class="ok">✓ net-flip</td></tr>
+  </table>
+  <div class="note"><b>Hub-damping, visible.</b> Two-hop <code>NTRK2</code> moved <i>more</i> than one-hop
+  <code>BDNF</code>: <code>CREB1</code> has ~40 out-edges so its influence is divided ~40× per target, while
+  <code>BDNF</code> has one out-edge and transmits cleanly. A promiscuous regulator can't dominate the network; a
+  specific one passes its signal — for free from the operator.</div>
+
+</div></body></html>
