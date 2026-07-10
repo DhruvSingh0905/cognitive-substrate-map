@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optimizing the Brain for Learning — a Network-Control Approach</title>
+<meta name="description" content="Turning a biomedical knowledge graph into a signed, directed control system: propagation, controllability, and multi-objective optimization.">
+<script>
+  window.MathJax = { tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] }, svg: { fontCache: 'global' } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--panel2:#1d212b;--ink:#e8eaed;--muted:#9aa3b2;--line:#2a2f3a;
+    --blue:#5b8def;--red:#e15759;--orange:#f0a23c;--grey:#7b8494;--green:#4caf7d;--gold:#e8c468}
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0f1115,#0c0e12);color:var(--ink);
+    font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:40px 22px}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:30px;line-height:1.2;margin:0 0 10px;letter-spacing:.2px}
+  .lede{color:var(--muted);font-size:17px;margin:0 0 8px}
+  .byline{color:var(--grey);font-size:13px;margin:0 0 26px;border-bottom:1px solid var(--line);padding-bottom:20px}
+  h2{font-size:21px;margin:40px 0 10px;letter-spacing:.2px}
+  h2 .num{color:var(--green);font-family:ui-monospace,Menlo,monospace;font-size:15px;margin-right:8px}
+  h3{font-size:15px;margin:22px 0 6px;color:#c7cedb}
+  p{color:#d7dce4} strong{color:#fff}
+  code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:14px}
+  a{color:#7fa8f0}
+  .eq{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px 20px;margin:14px 0;overflow-x:auto}
+  figure{margin:22px 0;text-align:center}
+  figure img{max-width:100%;border:1px solid var(--line);border-radius:12px;background:#0c0e12}
+  figcaption{color:var(--muted);font-size:13px;margin-top:8px;text-align:center}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:20px 0}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .kpi .n{font-size:22px;font-weight:700} .kpi .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .kpi.g .n{color:var(--green)}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0} td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--muted);font-weight:600} .mono{font-family:ui-monospace,Menlo,monospace} .pos{color:var(--green)} .neg{color:var(--red)} .ok{color:var(--green);font-weight:600}
+  .callout{background:rgba(240,162,60,.08);border-left:3px solid var(--orange);border-radius:8px;padding:12px 18px;margin:18px 0;font-size:15px;color:#e6d9c4}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+  .tag{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:12px;color:#c7cedb}
+  footer{color:var(--muted);font-size:13px;margin-top:40px;border-top:1px solid var(--line);padding-top:18px}
+</style></head>
+<body><div class="wrap">
+
+  <h1>Optimizing the Brain for Learning — a Network-Control Approach</h1>
+  <p class="lede">Turning a biomedical knowledge graph into a <strong>signed, directed control system</strong>, and
+  asking a control-theory question of it: which genes do you nudge — and by how much — to move the brain toward a
+  learning-optimal state, at minimal systemic cost?</p>
+  <p class="byline">A personal deep-dive into knowledge graphs, network propagation, structural controllability, and
+  multi-objective optimization. Everything below is a model — see the honesty section. Not medical advice.</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="n">129k</div><div class="l">KG nodes</div></div>
+    <div class="kpi"><div class="n">280</div><div class="l">brain core</div></div>
+    <div class="kpi"><div class="n">2,871</div><div class="l">signed edges</div></div>
+    <div class="kpi g"><div class="n">0.544</div><div class="l">ρ(Ŵ) &lt; 1</div></div>
+    <div class="kpi g"><div class="n">8/8</div><div class="l">sign checks</div></div>
+  </div>
+
+  <h2><span class="num">01</span>The premise</h2>
+  <p>Biology isn't a spreadsheet. Genes regulate other genes through transcription factors and signalling cascades,
+  so cognition emerges from a <strong>network</strong>, not from any single gene. If you model that network as a
+  graph, "how do I improve learning?" becomes a precise, two-part engineering question:</p>
+  <p>(1) <strong>Map</strong> the regulatory network of cognition as a directed, signed graph. (2) Find the
+  <strong>optimal set of node perturbations</strong> — gene up/down-regulations — that cascade the rest of the
+  network into a desired ("learning-optimal") state while minimizing off-target movement. It's a control problem.</p>
+
+  <h2><span class="num">02</span>The substrate: a knowledge graph, scoped to the brain</h2>
+  <p>The base is <a href="https://github.com/mims-harvard/PrimeKG">PrimeKG</a> — 129,375 nodes and ~4M edges across
+  ten types (genes/proteins, drugs, diseases, pathways, anatomy, phenotypes, biological processes, …). The lineage is
+  <a href="https://het.io">Hetionet / Rephetio</a>, a hetnet built to <em>repurpose drugs</em> by scoring the
+  metapaths that connect a compound to a disease.</p>
+  <figure><img src="assets/graph_bio_graph.png" alt="biological knowledge graph">
+    <figcaption>A slice of the knowledge graph around Alzheimer disease — drugs, genes, phenotypes, exposures and
+    related diseases. Edges are typed (indication, contraindication, association, …).</figcaption></figure>
+  <p>I re-purposed the idea for the brain: scope the whole-body graph down to the subnetwork that controls learning —
+  the machinery around glutamate, BDNF, GABA, the cholinergic and dopaminergic systems — using tissue-expression
+  enrichment, then bound it. A whole-body simulation is chaos; a focused core is tractable.</p>
+  <p>The result is <strong>280 nodes / 3,912 directed edges (2,871 signed: 2,253 activating, 618 inhibitory)</strong>,
+  in four layers — intervention (the knobs), input (systemic drivers), readout (disease gauges), and a bounded
+  one-hop expansion — with a single 200-node strongly-connected feedback core.</p>
+  <figure><img src="assets/graph_brain_substrate.png" alt="the cognitive substrate">
+    <figcaption>The cognitive substrate: 280 brain-scoped genes, colored by layer. Node size ∝ degree. The dense grey
+    core is the feedback machinery; blue/gold nodes are actionable knobs and systemic inputs.</figcaption></figure>
+
+  <h2><span class="num">03</span>From graph to operator</h2>
+  <p>Each edge carries a direction and a sign — $+1$ for activation (a gas pedal), $-1$ for inhibition (a brake). Stack
+  them into a weight matrix oriented so that multiplying by a state vector flows influence <em>source → target</em>:
+  $\;W_{ij}=\operatorname{sign}(j\to i)$.</p>
+  <h3>The hub problem, and the PageRank fix</h3>
+  <p>A promiscuous regulator that touches 40 targets would otherwise dominate everything. The fix is a
+  <strong>column-normalization by out-strength</strong> — the same transition operator behind Google's PageRank:</p>
+  <div class="eq">$$\hat{W}_{ij} = \frac{W_{ij}}{\sum_k \lvert W_{kj}\rvert}$$</div>
+  <p>Now a hub's outgoing influence is <em>split</em> across its targets: a gene shouting at 40 people is quieter, per
+  target, than one whispering to a single partner. Crucially, the absolute-value matrix is column-stochastic, so the
+  operator's spectral radius obeys $\rho(\hat W)\le 1$ — which guarantees the propagation in §4 converges. (The
+  symmetric GCN normalization $\hat W = D^{-1/2}\tilde W D^{-1/2}$ is the undirected analogue; it damps the
+  <em>receiver</em> rather than splitting the <em>sender</em>. For a directed regulatory graph the PageRank form is
+  the right one.)</p>
+  <figure><img src="assets/graph_mtor_hub.png" alt="mTOR hub">
+    <figcaption>Why normalization matters: MTOR alone has ~100 first-degree neighbours in PrimeKG. Without
+    hub-damping, perturbing it would flood the network.</figcaption></figure>
+
+  <h2><span class="num">04</span>Propagation: random-walk-with-restart</h2>
+  <p>To see what a perturbation <em>does</em>, inject a signal $p$ (push one gene) and let it diffuse — but with a
+  restart probability $\alpha$ that re-anchors the signal at its source each step. This is a random walk with restart,
+  identical to Personalized PageRank / APPNP:</p>
+  <div class="eq">$$x^{(t+1)} = (1-\alpha)\,\hat{W}\,x^{(t)} + \alpha\,p$$</div>
+  <p>At the fixed point this has a closed form — the resolvent, equivalently a damped power series over hop-count $k$:</p>
+  <div class="eq">$$x^{*} = \alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p \;=\; \alpha\sum_{k\ge 0}(1-\alpha)^{k}\hat{W}^{k}p$$</div>
+  <figure><img src="assets/diagram_rwr.png" alt="random walk with restart">
+    <figcaption>The signal spreads but decays by $(1-\alpha)^k$ at hop $k$ — an exponential brake. It cannot reach the
+    whole graph; it stays local to the perturbed node.</figcaption></figure>
+  <p>Two things fall out of this. First, the $(1-\alpha)^k$ term is an <strong>over-smoothing guard</strong>: deep
+  hops are exponentially suppressed, so $x^*$ never collapses to a uniform blob (the failure mode of naïvely deep
+  graph diffusion). Second, because the substrate has a 200-node feedback loop, there is no "one-shot" answer — you
+  must solve the <em>steady state under feedback</em>, which is exactly what the resolvent computes.</p>
+
+  <h2><span class="num">05</span>Can you even steer it? Controllability</h2>
+  <p>Before optimizing, a prior question: is this system <em>controllable</em> — can a handful of inputs drive it to
+  an arbitrary state? Classical (Kalman) controllability asks whether the controllability matrix, for input matrix
+  $B$, spans the whole state space:</p>
+  <div class="eq">$$\mathcal{C} = [\,B,\ WB,\ W^{2}B,\ \dots,\ W^{N-1}B\,]$$</div>
+  <p>For a large network, testing rank directly is impractical, so I used <strong>structural controllability</strong>
+  (Liu–Barabási): the minimum number of driver nodes equals the number of nodes left unmatched by a maximum matching
+  on the bipartite representation of the graph.</p>
+  <div class="eq">$$N_D = \max\!\left(N - |M^{*}|,\ 1\right)$$</div>
+  <p>where $M^{*}$ is a maximum matching. Intuitively, the denser the wiring, the larger the matching, and the
+  <em>fewer</em> independent drivers you need — $\langle k\rangle \propto 1/N_D$. Running this on the substrate:
+  <strong>all 280 nodes are reachable</strong> from the druggable set, full arbitrary-state control would need 81
+  independent drivers (only ~35 of them druggable) — but <strong>target-control of the cognitive core is
+  plausible</strong>, which is all the optimizer actually needs. The 200-node feedback core is the structural
+  signature of homeostasis: you can't just "set BDNF high" and walk away — the loop pushes back.</p>
+
+  <h2><span class="num">06</span>The target: what "optimal" actually means</h2>
+  <p>The least obvious part. I hand-curated a 94-gene target vector $d$ from a literature sweep, and the dominant
+  finding is that <strong>most cognitive variables are not "maximize" — they are set-points with an inverted-U</strong>
+  (Yerkes–Dodson / Arnsten): dopamine, arousal, cortisol, E/I balance, mTOR. 43 of 94 targets are inverted-U. A naïve
+  "turn up the good genes" objective gets nearly half the network's direction wrong. A second finding: some genes are
+  <em>readouts</em> (activity gauges like the immediate-early genes), not levers — tuning them is as useless as tuning
+  a hub.</p>
+  <figure><img src="assets/graph_target_set.png" alt="target gene set">
+    <figcaption>The target set: 94 genes grouped by system, colored by desired direction — green = up, red = down,
+    gold = set-point (inverted-U). Set-points dominate.</figcaption></figure>
+
+  <h2><span class="num">07</span>Scoring an intervention</h2>
+  <p>With a target vector $d$ and a computed response $x^{*}$, benefit is <strong>distance-reduction toward the
+  target</strong> — which naturally rewards partial progress and penalizes overshoot (the far arm of the inverted-U):</p>
+  <div class="eq">$$b_i = \lvert d_i\rvert - \lvert x^{*}_i - d_i\rvert$$</div>
+  <p>Aggregate benefit weights each node by our confidence in its target; cost prices intervention effort (an $L_1$
+  term that rewards using <em>few</em> knobs) plus systemic collateral (movement in off-target nodes — the
+  side-effect proxy):</p>
+  <div class="eq">$$B(p)=\sum_i w_i\,b_i, \qquad C(p)=\lVert p\rVert_1 + \gamma\!\!\sum_{j\,\notin\,\text{targets}}\!\! \lvert x^{*}_j\rvert$$</div>
+
+  <h2><span class="num">08</span>Uncertainty and optimization</h2>
+  <p>Because many edge magnitudes are sign-only and some targets are low-confidence, a single number would be
+  dishonest. I propagate the input uncertainty by <strong>Monte-Carlo</strong> (the GUM-S1 procedure): sample the
+  uncertain inputs, re-run, and report a coverage <em>band</em> on each intervention's score rather than a point. A
+  Sobol sensitivity analysis then attributes the band — telling you <em>which</em> unknown to go verify to shrink it.</p>
+  <p>The optimization itself is genuinely multi-objective (maximize $B$, minimize $C$), so the honest output is a
+  <strong>Pareto front</strong>, not a single winner. Because the system is small, I trace it exactly with the
+  <strong>ε-constraint</strong> method ($\max B$ s.t. $C\le\varepsilon$, sweeping $\varepsilon$) rather than a
+  weighted sum — which, on a non-convex problem, would silently miss parts of the front.</p>
+
+  <h2><span class="num">09</span>Does it work? Validation</h2>
+  <p>The engine is test-driven (11 tests, including real-substrate integration). The load-bearing check: perturb one
+  gene and confirm the response signs match the raw edge signs read straight from the database — <em>not</em> from the
+  model. At $\alpha=0.15$, $\rho(\hat W)=0.544$:</p>
+  <table>
+    <tr><th>perturb</th><th>→ target</th><th>edge</th><th>observed $x^{*}$</th><th>check</th></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>BDNF</td><td>+1</td><td class="mono pos">+0.0030</td><td class="ok">✓</td></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>JUN</td><td>−1</td><td class="mono neg">−0.0027</td><td class="ok">✓ flip</td></tr>
+    <tr><td class="mono">CREB1 ↑</td><td>NTRK2</td><td>+1→+1</td><td class="mono pos">+0.0080</td><td class="ok">✓ net</td></tr>
+    <tr><td class="mono">GSK3B ↑</td><td>CREB1</td><td>−1</td><td class="mono neg">−0.0041</td><td class="ok">✓ inhibition</td></tr>
+    <tr><td class="mono">AKT1 ↑</td><td>NFKB1</td><td>+1→−1</td><td class="mono neg">−0.0008</td><td class="ok">✓ net-flip</td></tr>
+  </table>
+  <div class="callout"><strong>Hub-damping, visible.</strong> Two-hop <code>NTRK2</code> moved <em>more</em> than
+  one-hop <code>BDNF</code>: <code>CREB1</code> has ~40 out-edges, so its per-target influence is divided ~40×, while
+  <code>BDNF</code> has one out-edge and transmits cleanly. A promiscuous regulator can't dominate; a specific one
+  passes its signal — straight out of the operator, for free.</div>
+  <p>The knowledge-graph substrate also carries real biological provenance. For example, querying why an
+  angiotensin-receptor blocker keeps appearing near metabolic disease surfaces a clean mechanistic path:</p>
+  <figure><img src="assets/graph_telmisartan_diabetes.png" alt="telmisartan to diabetes via PPARG">
+    <figcaption>Telmisartan → <strong>PPARG</strong> → type-2 diabetes: the drug's off-target PPARγ agonism is the
+    single shared node linking it to the disease in PrimeKG.</figcaption></figure>
+
+  <h2><span class="num">10</span>The honesty ladder</h2>
+  <p>Every layer sits on a different rung of groundedness, and saying so is the point: <strong>brain-scoping</strong>
+  is computed; <strong>edge direction + sign</strong> is curated from causal databases; <strong>edge magnitude</strong>
+  is mostly sign-only (a handful are real numbers); the <strong>objective and optimizer</strong> are specified and
+  math-checked but consume a hand-built target vector. And the whole propagation is a <em>linear response to a
+  nonlinear system</em> — valid for modest perturbations near baseline. So the deliverable is a <strong>ranking of
+  interventions and a map of the trade-offs</strong>, not fold-change predictions, and certainly not a protocol. It's
+  a math game — a serious one, but a game.</p>
+
+  <div class="tags">
+    <span class="tag">PrimeKG</span><span class="tag">Neo4j</span><span class="tag">NetworkX</span>
+    <span class="tag">Personalized PageRank / APPNP</span><span class="tag">Liu–Barabási controllability</span>
+    <span class="tag">ε-constraint / Pareto</span><span class="tag">Monte-Carlo (GUM-S1)</span><span class="tag">Sobol SA</span>
+  </div>
+
+  <footer>
+    Code + a shorter overview: <a href="index.html">the project page</a> ·
+    <a href="https://github.com/DhruvSingh0905/cognitive-substrate-map">GitHub</a>.
+    A personal learning project in network control theory + computational biology. Modeled CNS set-points for an
+    awake-encoding window — <strong>not medical advice, dosing, or a protocol</strong>.
+  </footer>
+
+</div></body></html>
