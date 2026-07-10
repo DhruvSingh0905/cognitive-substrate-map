@@ -1,8 +1,10 @@
 # A Network-Control Approach to a Learning-Optimal Brain State
 
-**Dhruv Singh** · Independent project · July 2026
+**Dhruv Singh** · Work in progress · a personal project · July 2026
 
-> **Abstract.** We cast a biomedical knowledge graph as a signed, directed control system and ask a control-theoretic question of it: which genes should be perturbed, and by how much, to steer the brain toward a learning-optimal state at minimal systemic cost? Starting from PrimeKG [1] (129,375 nodes), we scope to a 280-node brain core (2,871 signed edges, a 200-node feedback component), propagate perturbations by random-walk-with-restart / Personalized PageRank [4], analyze structural controllability [9], define a set-point-aware objective, quantify uncertainty by Monte-Carlo propagation [12] with Sobol attribution [13], and trace the benefit–cost Pareto front by the ε-constraint method [15]. Validated by sign-consistency against curated regulatory edges (8/8). The deliverable is a *ranking* of interventions and a trade-off map — not fold-change predictions, and not a protocol.
+> ⚠️ **Status — work in progress.** This is a personal learning project, not a finished or peer-reviewed paper. The substrate, propagation engine, and controllability analysis are built and tested; the objective, uncertainty pass, and optimizer are laid out below but **not yet run**. Feedback very welcome.
+
+> **Overview.** This project treats a biomedical knowledge graph as a signed, directed control system and asks a simple question with a hard answer: which genes would you nudge, and by how much, to move the brain toward a state that's good for learning — without disturbing everything else? (The scoring objective, uncertainty pass, and optimizer described below are specified but not yet run.) Starting from PrimeKG [1] (129,375 nodes), we scope to a 280-node brain core (2,871 signed edges, a 200-node feedback component), propagate perturbations by random-walk-with-restart / Personalized PageRank [4], analyze structural controllability [9], define a set-point-aware objective, quantify uncertainty by Monte-Carlo propagation [12] with Sobol attribution [13], and trace the benefit–cost Pareto front by the ε-constraint method [15]. Validated by sign-consistency against curated regulatory edges (8/8). The deliverable is a *ranking* of interventions and a trade-off map — not fold-change predictions, and not a protocol.
 
 **Keywords:** knowledge graphs · network propagation · structural controllability · multi-objective optimization · computational neuroscience
 
@@ -139,6 +141,10 @@ Two-hop `NTRK2` ($+0.0080$) exceeds one-hop `BDNF` ($+0.0030$) because $d^{\math
 ## 9. Groundedness and assumptions
 
 Rungs: brain-scoping (computed) > edge sign/direction (curated) > edge magnitude (mostly sign-only) > objective (hand-built $d$). $\hat W$ is the first-order Jacobian at baseline, so $x^{*}$ is valid only for small $\lVert x-x_0\rVert$; large perturbations leave the trust region. Deliverable: an *ordinal* ranking + trade-off map, not fold-change magnitudes, not medical advice.
+
+## 10. Status & roadmap
+
+**Built and tested so far:** the substrate (§1), the propagation operator + RWR engine (§2–3), the controllability analysis (§4). **Written out here but not yet run:** the set-point objective (§5), the Monte-Carlo uncertainty pass (§6), the ε-constraint optimizer (§7) — the active work. **Further out:** real edge magnitudes where data exists, and a nonlinear cross-check of the linear propagation. A living write-up; it will change as those pieces land.
 
 ---
 
