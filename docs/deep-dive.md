@@ -1,116 +1,143 @@
 # Optimizing the Brain for Learning — a Network-Control Approach
 
-Turning a biomedical knowledge graph into a **signed, directed control system**, and asking a control-theory question of it: which genes do you nudge — and by how much — to move the brain toward a learning-optimal state, at minimal systemic cost?
+A biomedical knowledge graph cast as a signed, directed control system — propagation via random-walk-with-restart, structural controllability, and multi-objective optimization over node perturbations.
 
-*A personal deep-dive into knowledge graphs, network propagation, structural controllability, and multi-objective optimization. Everything below is a model — see the honesty section. Not medical advice.*
+*Model, not medical advice. Code: [github.com/DhruvSingh0905/cognitive-substrate-map](https://github.com/DhruvSingh0905/cognitive-substrate-map) · [overview](index.html)*
 
-**129k KG nodes · 280 brain core · 2,871 signed edges · ρ(Ŵ) = 0.544 · 8/8 sign checks ✓**
+**129k KG nodes · 280 brain core · 2,871 signed edges · ρ(Ŵ) = 0.544 · N_D = 81**
 
-## 01 · The premise
+## 01 · Substrate
 
-Biology isn't a spreadsheet. Genes regulate other genes through transcription factors and signalling cascades, so cognition emerges from a **network**, not from any single gene. Modeling that network as a graph turns "how do I improve learning?" into a two-part engineering question:
+Base graph: [PrimeKG](https://github.com/mims-harvard/PrimeKG), $|V|=129{,}375$, $|E|\approx4.05\times10^{6}$, 10 node types, 30 edge types (lineage: Hetionet/Rephetio hetnets, drug repurposing via metapath scoring).
 
-1. **Map** the regulatory network of cognition as a directed, signed graph.
-2. Find the **optimal set of node perturbations** — gene up/down-regulations — that cascade the rest of the network into a "learning-optimal" state while minimizing off-target movement.
+**Brain-scoping.** Retain gene $v$ by tissue-expression enrichment over PrimeKG `anatomy_protein_present` edges $E_a$:
 
-It's a control problem.
+$$e(v)=\frac{\bigl|\{a:(v,a)\in E_a,\ a\in A_{\mathrm{brain}}\}\bigr|}{\bigl|\{a:(v,a)\in E_a\}\bigr|},\qquad \text{keep if } e(v)\ge 0.15 \ \wedge\ \deg_a(v)\ge 5$$
 
-## 02 · The substrate: a knowledge graph, scoped to the brain
+Layers (post-prune): intervention 70, input 15, readout 6, trap 2, expansion 187. Result: $N=280$, directed edges $3912$, signed $2871$ ($+{:}\,2253,\ -{:}\,618$), one SCC of $200$.
 
-The base is [PrimeKG](https://github.com/mims-harvard/PrimeKG) — 129,375 nodes and ~4M edges across ten types (genes/proteins, drugs, diseases, pathways, anatomy, phenotypes, …). The lineage is [Hetionet / Rephetio](https://het.io), a hetnet built to *repurpose drugs* by scoring the metapaths connecting a compound to a disease.
+![knowledge graph slice](assets/graph_bio_graph.png)
 
-![biological knowledge graph](assets/graph_bio_graph.png)
+![substrate](assets/graph_brain_substrate.png)
 
-I re-purposed the idea for the brain: scope the whole-body graph down to the subnetwork that controls learning — glutamate, BDNF, GABA, the cholinergic and dopaminergic systems — using tissue-expression enrichment, then bound it. The result is **280 nodes / 3,912 directed edges (2,871 signed: 2,253 activating, 618 inhibitory)** in four layers (intervention, input, readout, bounded expansion), with a single 200-node strongly-connected feedback core.
+## 02 · Operator
 
-![the cognitive substrate](assets/graph_brain_substrate.png)
+Signed adjacency $W\in\{-1,0,+1\}^{N\times N}$, oriented so $(Wx)_i$ is influx to $i$: $W_{ij}=\operatorname{sign}(j\to i)$. Out-strength $d^{\mathrm{out}}_j=\sum_i|W_{ij}|$. Column-normalize ($D_{\mathrm{out}}=\operatorname{diag}(d^{\mathrm{out}})$):
 
-## 03 · From graph to operator
+$$\hat{W}=W\,D_{\mathrm{out}}^{-1},\qquad \hat{W}_{ij}=\frac{W_{ij}}{\sum_k|W_{kj}|}$$
 
-Each edge carries a direction and a sign — $+1$ activation (gas pedal), $-1$ inhibition (brake) — stacked into a matrix oriented so influence flows *source → target*: $W_{ij}=\operatorname{sign}(j\to i)$.
+**Spectral bound.** $|\hat{W}|$ is column-stochastic, so by Perron–Frobenius $\rho(\hat{W})\le\rho(|\hat{W}|)=1$ — guaranteeing §03 converges. Measured: $\rho(\hat W)=0.544$.
 
-**The hub problem, and the PageRank fix.** A regulator touching 40 targets would dominate everything. Column-normalize by out-strength — the PageRank transition operator:
+**Why column, not symmetric:**
 
-$$\hat{W}_{ij} = \frac{W_{ij}}{\sum_k \lvert W_{kj}\rvert}$$
+| scheme | operator | spectrum | damps |
+|---|---|---|---|
+| PageRank / random-walk (used) | $W D_{\mathrm{out}}^{-1}$ | $\rho\le1$ (col-stochastic) | sender / out-hubs |
+| GCN symmetric | $D^{-1/2}\tilde W D^{-1/2}$ | $\lambda\in[-1,1]$ | both endpoints |
+| row random-walk | $D_{\mathrm{in}}^{-1}W$ | $\rho\le1$ | receiver / in-hubs |
 
-A hub's influence is now *split* across its targets. And the absolute-value matrix is column-stochastic, so $\rho(\hat{W}) \le 1$ — guaranteeing the propagation below converges. (The symmetric GCN form $\hat{W}=D^{-1/2}\tilde{W}D^{-1/2}$ is the undirected analogue; it damps the receiver instead of splitting the sender. For a directed regulatory graph the PageRank form is correct.)
+Column form splits a regulator's outgoing influence across targets — correct for a directed graph where promiscuity is an *out*-degree property.
 
 ![mTOR hub](assets/graph_mtor_hub.png)
 
-## 04 · Propagation: random-walk-with-restart
+## 03 · Propagation (RWR / APPNP)
 
-Inject a signal $p$ (push one gene) and diffuse it, with a restart probability $\alpha$ that re-anchors it at the source each step — a random walk with restart, identical to Personalized PageRank / APPNP:
+Source $p\in\mathbb{R}^N$, restart probability $\alpha$:
 
-$$x^{(t+1)} = (1-\alpha)\,\hat{W}\,x^{(t)} + \alpha\,p$$
+$$x^{(t+1)}=(1-\alpha)\,\hat{W}x^{(t)}+\alpha\,p$$
 
-At the fixed point, the closed form is a resolvent — equivalently a damped power series over hop-count $k$:
+Fixed point solves $(I-(1-\alpha)\hat{W})x^{*}=\alpha p$. Since $\rho((1-\alpha)\hat{W})=(1-\alpha)\rho(\hat W)\le 1-\alpha<1$, the inverse exists and equals its Neumann series:
 
-$$x^{*} = \alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p = \alpha\sum_{k\ge 0}(1-\alpha)^{k}\hat{W}^{k}p$$
+$$x^{*}=\alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p=\alpha\sum_{k\ge0}(1-\alpha)^{k}\hat{W}^{k}p$$
+
+- Effective radius: mean hops $\bar k=(1-\alpha)/\alpha\approx5.7$ at $\alpha=0.15$.
+- Over-smoothing limit: $\alpha\to0\Rightarrow x^{*}\to$ leading eigenvector of $\hat W$ (source-independent); the $(1-\alpha)^k$ decay is the guard; diagnostic $\operatorname{Var}_i(x^{*}_i)\not\approx0$.
+- Feedback: the 200-node SCC ⇒ $x^{*}$ is a steady state under recurrence; the resolvent is required.
 
 ![random walk with restart](assets/diagram_rwr.png)
 
-The $(1-\alpha)^{k}$ term is an **over-smoothing guard**: deep hops are exponentially suppressed, so $x^{*}$ never collapses to a uniform blob. And because the substrate has a 200-node feedback loop, there's no one-shot answer — you solve the *steady state under feedback*, which is exactly what the resolvent computes.
+## 04 · Controllability
 
-## 05 · Can you even steer it? Controllability
+LTI form with input map $B\in\mathbb{R}^{N\times m}$: $\dot{x}=Wx+Bu$. Kalman: $(W,B)$ controllable iff
 
-Is the system controllable — can a few inputs drive it to an arbitrary state? Kalman controllability asks whether the controllability matrix spans the state space:
+$$\operatorname{rank}\mathcal{C}=N,\qquad \mathcal{C}=[\,B,\ WB,\ W^{2}B,\ \dots,\ W^{N-1}B\,]$$
 
-$$\mathcal{C} = [\,B,\ WB,\ W^{2}B,\ \dots,\ W^{N-1}B\,]$$
+**Structural controllability (Lin; Liu–Barabási).** Controllable for almost all edge weights iff no dilation + spanned by inputs. Minimum driver count is set by a maximum matching $M^{*}$ on the bipartite $\mathcal{B}(V^{+},V^{-})$ (edge $j^{+}\!\to i^{-}$ for every $j\to i$):
 
-For a large network, direct rank tests are impractical, so I used **structural controllability** (Liu–Barabási): the minimum driver count equals the nodes left unmatched by a maximum matching $M^{*}$ on the graph's bipartite representation:
+$$N_{D}=\max\bigl(N-|M^{*}|,\ 1\bigr)$$
 
-$$N_D = \max\!\left(N - |M^{*}|,\ 1\right)$$
+Computed via Hopcroft–Karp in $O(|E|\sqrt{N})$. Denser wiring ⇒ larger $M^{*}$ ⇒ fewer drivers: $\langle k\rangle\propto1/N_{D}$. Reachability: $R=\bigcup_{d\in\mathcal{D}}\operatorname{desc}(d)$.
 
-Denser wiring → larger matching → fewer independent drivers ($\langle k\rangle \propto 1/N_D$). On the substrate: **all 280 nodes are reachable**, full arbitrary-state control needs 81 drivers (~35 druggable), but **target-control of the cognitive core is plausible** — all the optimizer needs. The 200-node feedback core is the structural signature of homeostasis.
+| quantity | value |
+|---|---|
+| $\|\mathcal D\|$ druggable inputs | 172 |
+| reachable $\|R\|/N$ | 280 / 280 |
+| min drivers $N_D$ (full control) | 81 |
+| drivers that are druggable | 35 / 81 |
+| feedback SCC | 200 |
 
-## 06 · The target: what "optimal" means
+Full arbitrary-state control fails ($35<81$). But **target control** (Gao et al. 2014) — steering a readout subset $S\subsetneq V$ — needs $\le N_D$ inputs, and $R=V$ places every target in the reachable set, so it is feasible.
 
-I hand-curated a 94-gene target vector $d$ from a literature sweep. The dominant finding: **most cognitive variables are not "maximize" — they're set-points with an inverted-U** (Yerkes–Dodson / Arnsten): dopamine, arousal, cortisol, E/I balance, mTOR. 43 of 94 targets are inverted-U, so a naïve "turn up the good genes" objective gets nearly half the directions wrong. A second finding: some genes are *readouts* (activity gauges), not levers.
+## 05 · Target & objective
 
-![target gene set](assets/graph_target_set.png)
+Target deviation $d\in\mathbb{R}^N$; shapes: monotone (attractor at ceiling/floor), set-point (inverted-U, interior). Benefit = distance-reduction to the attractor:
 
-## 07 · Scoring an intervention
+$$b_i=\lvert d_i\rvert-\lvert x^{*}_i-d_i\rvert$$
 
-Benefit is **distance-reduction toward the target** — rewarding partial progress, penalizing overshoot (the far arm of the inverted-U):
+A set-point at baseline has $d_i=0\Rightarrow b_i=-|x^{*}_i|$ (any displacement penalized). Aggregate ($w_i$ = confidence; readouts $w_i=0$) and cost ($L_1$ effort + off-target collateral):
 
-$$b_i = \lvert d_i\rvert - \lvert x^{*}_i - d_i\rvert$$
+$$B(p)=\sum_i w_i\,b_i,\qquad C(p)=\lVert p\rVert_1+\gamma\sum_{j\,\notin\,T}\lvert x^{*}_j\rvert$$
 
-Aggregate benefit weights each node by confidence; cost prices intervention effort ($L_1$ → few knobs) plus systemic collateral:
+Curated target: 94 genes, $43$ set-point / $30$ up / $12$ down.
 
-$$B(p)=\sum_i w_i\,b_i, \qquad C(p)=\lVert p\rVert_1 + \gamma\sum_{j\,\notin\,\text{targets}} \lvert x^{*}_j\rvert$$
+![target set](assets/graph_target_set.png)
 
-## 08 · Uncertainty and optimization
+## 06 · Uncertainty quantification
 
-Many edge magnitudes are sign-only, so a single number would be dishonest. I propagate input uncertainty by **Monte-Carlo** (GUM-S1): sample the uncertain inputs, re-run, report a coverage *band* per intervention. A **Sobol** sensitivity analysis attributes the band — telling you which unknown to verify to shrink it.
+Uncertain inputs $\theta$ = confidence-weight intervals + sign-only magnitudes. Monte-Carlo (GUM-S1): draw $\theta^{(m)}$, evaluate $Y^{(m)}=B(p;\theta^{(m)})$, report the order-statistic coverage interval:
 
-The optimization is multi-objective (max $B$, min $C$), so the honest output is a **Pareto front**. Because the system is small, I trace it exactly with the **ε-constraint** method ($\max B$ s.t. $C\le\varepsilon$, sweeping $\varepsilon$) rather than a weighted sum — which, on a non-convex problem, silently misses parts of the front.
+$$\widehat{\mathrm{CI}}_{90\%}=\bigl[\,Y_{(\lceil0.05M\rceil)},\ Y_{(\lfloor0.95M\rfloor)}\,\bigr]$$
 
-## 09 · Does it work? Validation
+Attribute via Sobol indices:
 
-Test-driven (11 tests, incl. real-substrate integration). The load-bearing check: perturb a gene and confirm response signs match the raw edge signs from the database — *not* the model. At $\alpha=0.15$, $\rho(\hat{W})=0.544$:
+$$S_i=\frac{\operatorname{Var}_{\theta_i}\!\bigl(\mathbb{E}[Y\mid\theta_i]\bigr)}{\operatorname{Var}(Y)},\qquad S_{T_i}=\frac{\mathbb{E}\bigl[\operatorname{Var}(Y\mid\theta_{\sim i})\bigr]}{\operatorname{Var}(Y)},\qquad S_{T_i}\ge S_i$$
 
-| perturb | → target | edge | observed $x^{*}$ | check |
+$\arg\max_i S_{T_i}$ = the input whose verification most shrinks the band.
+
+## 07 · Optimization
+
+Vector program $\min_p (-B(p),\ C(p))$; solution = Pareto front. Traced exactly by ε-constraint:
+
+$$\max_p\ B(p)\quad\text{s.t.}\quad C(p)\le\varepsilon$$
+
+Weighted-sum $\max_p B(p)-\lambda C(p)$ is a supporting hyperplane of normal $(1,\lambda)$: recovers only $\partial\,\mathrm{conv}$ of the front, so on a non-convex front it *provably misses* concave regions for every $\lambda$. ε-constraint / NSGA-II do not. Small state space ⇒ exact inner solve is affordable.
+
+## 08 · Validation
+
+Test-driven (11 tests). Invariants: $\rho(\hat W)\le1$; resolvent $=$ truncated Neumann series to $10^{-8}$; sign propagation; real-substrate integration. Sign check — perturb $+1$, compare $\operatorname{sign}(x^{*})$ to raw edge signs ($\alpha=0.15$, $\rho(\hat W)=0.544$):
+
+| perturb | → target | edge | $x^{*}$ | check |
 |---|---|---|---|---|
 | `CREB1 ↑` | BDNF | +1 | +0.0030 | ✓ |
 | `CREB1 ↑` | JUN | −1 | −0.0027 | ✓ flip |
 | `CREB1 ↑` | NTRK2 | +1→+1 | +0.0080 | ✓ net |
-| `GSK3B ↑` | CREB1 | −1 | −0.0041 | ✓ inhibition |
+| `GSK3B ↑` | CREB1 | −1 | −0.0041 | ✓ inhib |
 | `AKT1 ↑` | NFKB1 | +1→−1 | −0.0008 | ✓ net-flip |
 
-**Hub-damping, visible.** Two-hop `NTRK2` moved *more* than one-hop `BDNF`: `CREB1` has ~40 out-edges so its per-target influence is divided ~40×, while `BDNF` has one out-edge and transmits cleanly. Falls out of the operator for free.
+**Hub-damping is observable:** 2-hop `NTRK2` ($+0.0080$) exceeds 1-hop `BDNF` ($+0.0030$) because $d^{\mathrm{out}}(\text{CREB1})\approx40$ divides its per-target transmission while $d^{\mathrm{out}}(\text{BDNF})=1$ transmits undivided — a direct consequence of $\hat W=WD_{\mathrm{out}}^{-1}$.
 
-The KG substrate carries real biological provenance — e.g. why an angiotensin-receptor blocker sits near metabolic disease:
+![telmisartan PPARG diabetes](assets/graph_telmisartan_diabetes.png)
 
-![telmisartan to diabetes via PPARG](assets/graph_telmisartan_diabetes.png)
+Telmisartan → PPARG → type-2 diabetes: a single shared node (off-target PPARγ agonism).
 
-Telmisartan → **PPARG** → type-2 diabetes: the drug's off-target PPARγ agonism is the single shared node linking it to the disease in PrimeKG.
+## 09 · Groundedness & assumptions
 
-## 10 · The honesty ladder
-
-Every layer sits on a different rung: **brain-scoping** is computed; **edge direction + sign** is curated; **edge magnitude** is mostly sign-only; the **objective + optimizer** are math-checked but consume a hand-built target vector. And the propagation is a *linear response to a nonlinear system* — valid for modest perturbations near baseline. So the deliverable is a **ranking of interventions and a map of trade-offs**, not fold-change predictions, and not a protocol. A math game — a serious one, but a game.
+- **Rungs:** brain-scoping (computed) > edge sign/direction (curated) > edge magnitude (mostly sign-only) > objective (hand-built $d$).
+- **Linearization:** $\hat W$ is the first-order Jacobian of the true nonlinear dynamics at baseline $x_0$; $x^{*}$ valid for small $\lVert x-x_0\rVert$. Large $\lVert p\rVert$ leaves the trust region (saturation, sign flips).
+- **Deliverable:** a ranking of interventions and the trade-off front — ordinal, robust to linearization — not fold-change magnitudes, not a protocol.
 
 ---
 
-**Stack:** PrimeKG · Neo4j · NetworkX · Personalized PageRank / APPNP · Liu–Barabási controllability · ε-constraint / Pareto · Monte-Carlo (GUM-S1) · Sobol SA
+**Stack:** PrimeKG · Neo4j · NetworkX · Personalized PageRank / APPNP · Liu–Barabási / Hopcroft–Karp · Kalman controllability · ε-constraint / Pareto · Monte-Carlo (GUM-S1) · Sobol indices
 
-Code + shorter overview: [the project page](index.html) · [GitHub](https://github.com/DhruvSingh0905/cognitive-substrate-map). A personal learning project — **not medical advice, dosing, or a protocol.**
+[Overview](index.html) · [GitHub](https://github.com/DhruvSingh0905/cognitive-substrate-map) · personal learning project — not medical advice.
