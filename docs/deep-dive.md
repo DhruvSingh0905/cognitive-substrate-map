@@ -1,120 +1,128 @@
-# Optimizing the Brain for Learning — a Network-Control Approach
+# A Network-Control Approach to a Learning-Optimal Brain State
 
-A biomedical knowledge graph cast as a signed, directed control system — propagation via random-walk-with-restart, structural controllability, and multi-objective optimization over node perturbations.
+**Dhruv Singh** · Independent project · July 2026
 
-*Model, not medical advice. Code: [github.com/DhruvSingh0905/cognitive-substrate-map](https://github.com/DhruvSingh0905/cognitive-substrate-map) · [overview](index.html)*
+> **Abstract.** We cast a biomedical knowledge graph as a signed, directed control system and ask a control-theoretic question of it: which genes should be perturbed, and by how much, to steer the brain toward a learning-optimal state at minimal systemic cost? Starting from PrimeKG [1] (129,375 nodes), we scope to a 280-node brain core (2,871 signed edges, a 200-node feedback component), propagate perturbations by random-walk-with-restart / Personalized PageRank [4], analyze structural controllability [9], define a set-point-aware objective, quantify uncertainty by Monte-Carlo propagation [12] with Sobol attribution [13], and trace the benefit–cost Pareto front by the ε-constraint method [15]. Validated by sign-consistency against curated regulatory edges (8/8). The deliverable is a *ranking* of interventions and a trade-off map — not fold-change predictions, and not a protocol.
 
-**129k KG nodes · 280 brain core · 2,871 signed edges · ρ(Ŵ) = 0.544 · N_D = 81**
+**Keywords:** knowledge graphs · network propagation · structural controllability · multi-objective optimization · computational neuroscience
 
-## 01 · Substrate
+*(Academic-styled HTML version: [deep-dive.html](deep-dive.html))*
 
-Base graph: [PrimeKG](https://github.com/mims-harvard/PrimeKG), $|V|=129{,}375$, $|E|\approx4.05\times10^{6}$, 10 node types, 30 edge types (lineage: Hetionet/Rephetio hetnets, drug repurposing via metapath scoring).
+## 1. Substrate
+
+Base graph: PrimeKG [1] ($|V|=129{,}375$, $|E|\approx4.05\times10^{6}$, 10 node types, 30 edge types); lineage is the Hetionet / Rephetio hetnet for drug repurposing via metapath scoring [2].
 
 **Brain-scoping.** Retain gene $v$ by tissue-expression enrichment over PrimeKG `anatomy_protein_present` edges $E_a$:
 
-$$e(v)=\frac{\bigl|\{a:(v,a)\in E_a,\ a\in A_{\mathrm{brain}}\}\bigr|}{\bigl|\{a:(v,a)\in E_a\}\bigr|},\qquad \text{keep if } e(v)\ge 0.15 \ \wedge\ \deg_a(v)\ge 5$$
+$$e(v)=\frac{\bigl|\{a:(v,a)\in E_a,\ a\in A_{\mathrm{brain}}\}\bigr|}{\bigl|\{a:(v,a)\in E_a\}\bigr|},\qquad \text{keep if } e(v)\ge 0.15 \ \wedge\ \deg_a(v)\ge 5 \tag{1}$$
 
-Layers (post-prune): intervention 70, input 15, readout 6, trap 2, expansion 187. Result: $N=280$, directed edges $3912$, signed $2871$ ($+{:}\,2253,\ -{:}\,618$), one SCC of $200$.
+*In words —* keep a gene only if a meaningful fraction of the tissues it is expressed in are brain tissues, and only if it is expressed in enough places for that fraction to be trustworthy.
 
-![knowledge graph slice](assets/graph_bio_graph.png)
+Post-prune: $N=280$ (intervention 70, input 15, readout 6, trap 2, expansion 187), $3912$ directed edges, $2871$ signed ($+{:}\,2253,\ -{:}\,618$), one SCC of $200$.
 
-![substrate](assets/graph_brain_substrate.png)
+![Figure 1 — knowledge graph slice](assets/graph_bio_graph.png)
 
-## 02 · Operator
+![Figure 2 — the 280-node substrate](assets/graph_brain_substrate.png)
 
-Signed adjacency $W\in\{-1,0,+1\}^{N\times N}$, oriented so $(Wx)_i$ is influx to $i$: $W_{ij}=\operatorname{sign}(j\to i)$. Out-strength $d^{\mathrm{out}}_j=\sum_i|W_{ij}|$. Column-normalize ($D_{\mathrm{out}}=\operatorname{diag}(d^{\mathrm{out}})$):
+## 2. The propagation operator
 
-$$\hat{W}=W\,D_{\mathrm{out}}^{-1},\qquad \hat{W}_{ij}=\frac{W_{ij}}{\sum_k|W_{kj}|}$$
+Signed adjacency $W\in\{-1,0,+1\}^{N\times N}$, oriented so $(Wx)_i$ is influx to $i$: $W_{ij}=\operatorname{sign}(j\to i)$. Out-strength $d^{\mathrm{out}}_j=\sum_i|W_{ij}|$; column-normalize into the Personalized-PageRank transition [3]:
 
-**Spectral bound.** $|\hat{W}|$ is column-stochastic, so by Perron–Frobenius $\rho(\hat{W})\le\rho(|\hat{W}|)=1$ — guaranteeing §03 converges. Measured: $\rho(\hat W)=0.544$.
+$$\hat{W}=W\,D_{\mathrm{out}}^{-1},\qquad \hat{W}_{ij}=\frac{W_{ij}}{\sum_k|W_{kj}|} \tag{2}$$
 
-**Why column, not symmetric:**
+*In words —* split each gene's outgoing influence evenly across the targets it regulates, so a hub gene that talks to everyone cannot dominate.
 
-| scheme | operator | spectrum | damps |
-|---|---|---|---|
-| PageRank / random-walk (used) | $W D_{\mathrm{out}}^{-1}$ | $\rho\le1$ (col-stochastic) | sender / out-hubs |
-| GCN symmetric | $D^{-1/2}\tilde W D^{-1/2}$ | $\lambda\in[-1,1]$ | both endpoints |
-| row random-walk | $D_{\mathrm{in}}^{-1}W$ | $\rho\le1$ | receiver / in-hubs |
+$|\hat{W}|$ is column-stochastic, so by Perron–Frobenius $\rho(\hat{W})\le1$ (measured: $0.544$), guaranteeing §3 converges. Column normalization suits a *directed* graph (promiscuity is an out-degree property); the symmetric GCN form $D^{-1/2}\tilde{W}D^{-1/2}$ [6] is the undirected analogue.
 
-Column form splits a regulator's outgoing influence across targets — correct for a directed graph where promiscuity is an *out*-degree property.
+![Figure 3 — MTOR hub](assets/graph_mtor_hub.png)
 
-![mTOR hub](assets/graph_mtor_hub.png)
+## 3. Propagation by random-walk-with-restart
 
-## 03 · Propagation (RWR / APPNP)
+Source $p\in\mathbb{R}^N$, restart probability $\alpha$ [5,4]:
 
-Source $p\in\mathbb{R}^N$, restart probability $\alpha$:
+$$x^{(t+1)}=(1-\alpha)\,\hat{W}x^{(t)}+\alpha\,p \tag{3}$$
 
-$$x^{(t+1)}=(1-\alpha)\,\hat{W}x^{(t)}+\alpha\,p$$
+*In words —* at every step, spread the signal one hop, but yank a fixed fraction $\alpha$ back to the gene you started from.
 
-Fixed point solves $(I-(1-\alpha)\hat{W})x^{*}=\alpha p$. Since $\rho((1-\alpha)\hat{W})=(1-\alpha)\rho(\hat W)\le 1-\alpha<1$, the inverse exists and equals its Neumann series:
+Fixed point solves $(I-(1-\alpha)\hat{W})x^{*}=\alpha p$; since $\rho((1-\alpha)\hat{W})\le1-\alpha<1$ it equals its Neumann series:
 
-$$x^{*}=\alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p=\alpha\sum_{k\ge0}(1-\alpha)^{k}\hat{W}^{k}p$$
+$$x^{*}=\alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p=\alpha\sum_{k\ge0}(1-\alpha)^{k}\hat{W}^{k}p \tag{4}$$
 
-- Effective radius: mean hops $\bar k=(1-\alpha)/\alpha\approx5.7$ at $\alpha=0.15$.
-- Over-smoothing limit: $\alpha\to0\Rightarrow x^{*}\to$ leading eigenvector of $\hat W$ (source-independent); the $(1-\alpha)^k$ decay is the guard; diagnostic $\operatorname{Var}_i(x^{*}_i)\not\approx0$.
-- Feedback: the 200-node SCC ⇒ $x^{*}$ is a steady state under recurrence; the resolvent is required.
+*In words —* the settled-down response; equivalently, sum the signal over every path length $k$, each discounted by $(1-\alpha)^k$, so distant hops fade exponentially.
 
-![random walk with restart](assets/diagram_rwr.png)
+Mean radius $\bar k=(1-\alpha)/\alpha\approx5.7$ at $\alpha=0.15$. As $\alpha\to0$, $x^{*}\to$ leading eigenvector of $\hat W$ (over-smoothing), which the decay prevents. The 200-node SCC is why a steady-state resolvent is required.
 
-## 04 · Controllability
+![Figure 4 — random walk with restart](assets/diagram_rwr.png)
 
-LTI form with input map $B\in\mathbb{R}^{N\times m}$: $\dot{x}=Wx+Bu$. Kalman: $(W,B)$ controllable iff
+## 4. Controllability
 
-$$\operatorname{rank}\mathcal{C}=N,\qquad \mathcal{C}=[\,B,\ WB,\ W^{2}B,\ \dots,\ W^{N-1}B\,]$$
+LTI form with input map $B\in\mathbb{R}^{N\times m}$: $\dot{x}=Wx+Bu$. Controllable iff (Kalman [7]):
 
-**Structural controllability (Lin; Liu–Barabási).** Controllable for almost all edge weights iff no dilation + spanned by inputs. Minimum driver count is set by a maximum matching $M^{*}$ on the bipartite $\mathcal{B}(V^{+},V^{-})$ (edge $j^{+}\!\to i^{-}$ for every $j\to i$):
+$$\operatorname{rank}\mathcal{C}=N,\qquad \mathcal{C}=[\,B,\ WB,\ W^{2}B,\ \dots,\ W^{N-1}B\,] \tag{5}$$
 
-$$N_{D}=\max\bigl(N-|M^{*}|,\ 1\bigr)$$
+*In words —* you can reach any state exactly when your inputs, pushed through successive hops, together span all $N$ dimensions.
 
-Computed via Hopcroft–Karp in $O(|E|\sqrt{N})$. Denser wiring ⇒ larger $M^{*}$ ⇒ fewer drivers: $\langle k\rangle\propto1/N_{D}$. Reachability: $R=\bigcup_{d\in\mathcal{D}}\operatorname{desc}(d)$.
+Structural controllability (Lin [8]; Liu–Slotine–Barabási [9]): minimum drivers = nodes left unmatched by a maximum matching $M^{*}$:
+
+$$N_{D}=\max\bigl(N-|M^{*}|,\ 1\bigr) \tag{6}$$
+
+*In words —* the fewest genes you must control is the number left over after pairing up the network as efficiently as possible.
+
+Matching via Hopcroft–Karp [10] in $O(|E|\sqrt N)$; $\langle k\rangle\propto1/N_D$. Result: all 280 reachable, full control needs $N_D=81$ (35 druggable) — arbitrary-state control fails, but **target control** [11] of the readout subset needs $\le N_D$ inputs and is feasible.
 
 | quantity | value |
 |---|---|
-| $\|\mathcal D\|$ druggable inputs | 172 |
-| reachable $\|R\|/N$ | 280 / 280 |
-| min drivers $N_D$ (full control) | 81 |
-| drivers that are druggable | 35 / 81 |
+| druggable inputs \|𝒟\| | 172 |
+| reachable \|R\|/N | 280 / 280 |
+| min drivers N_D (full) | 81 |
+| drivers druggable | 35 / 81 |
 | feedback SCC | 200 |
 
-Full arbitrary-state control fails ($35<81$). But **target control** (Gao et al. 2014) — steering a readout subset $S\subsetneq V$ — needs $\le N_D$ inputs, and $R=V$ places every target in the reachable set, so it is feasible.
+## 5. Target state and objective
 
-## 05 · Target & objective
+Target deviation $d\in\mathbb{R}^N$. Most cognitive variables are set-points with an inverted-U (Yerkes–Dodson [18]; Arnsten [19]). Benefit = distance-reduction to the target:
 
-Target deviation $d\in\mathbb{R}^N$; shapes: monotone (attractor at ceiling/floor), set-point (inverted-U, interior). Benefit = distance-reduction to the attractor:
+$$b_i=\lvert d_i\rvert-\lvert x^{*}_i-d_i\rvert \tag{7}$$
 
-$$b_i=\lvert d_i\rvert-\lvert x^{*}_i-d_i\rvert$$
+*In words —* how much closer to the ideal level this gene got: positive for moving toward the target, negative for overshooting.
 
-A set-point at baseline has $d_i=0\Rightarrow b_i=-|x^{*}_i|$ (any displacement penalized). Aggregate ($w_i$ = confidence; readouts $w_i=0$) and cost ($L_1$ effort + off-target collateral):
+Aggregate ($w_i$ = confidence, readouts $w_i=0$) and cost ($L_1$ effort + off-target collateral):
 
-$$B(p)=\sum_i w_i\,b_i,\qquad C(p)=\lVert p\rVert_1+\gamma\sum_{j\,\notin\,T}\lvert x^{*}_j\rvert$$
+$$B(p)=\sum_i w_i\,b_i,\qquad C(p)=\lVert p\rVert_1+\gamma\sum_{j\,\notin\,T}\lvert x^{*}_j\rvert \tag{8}$$
 
-Curated target: 94 genes, $43$ set-point / $30$ up / $12$ down.
+*In words —* total good across genes, against total cost: how hard you pushed plus how much you disturbed things outside the target set.
 
-![target set](assets/graph_target_set.png)
+Curated vector: 94 genes, 43 set-point / 30 up / 12 down.
 
-## 06 · Uncertainty quantification
+![Figure 5 — target set](assets/graph_target_set.png)
 
-Uncertain inputs $\theta$ = confidence-weight intervals + sign-only magnitudes. Monte-Carlo (GUM-S1): draw $\theta^{(m)}$, evaluate $Y^{(m)}=B(p;\theta^{(m)})$, report the order-statistic coverage interval:
+## 6. Uncertainty quantification
 
-$$\widehat{\mathrm{CI}}_{90\%}=\bigl[\,Y_{(\lceil0.05M\rceil)},\ Y_{(\lfloor0.95M\rfloor)}\,\bigr]$$
+Uncertain inputs $\theta$ (confidence-weight intervals + sign-only magnitudes). Monte-Carlo (GUM-S1 [12]): draw $\theta^{(m)}$, evaluate $Y^{(m)}=B(p;\theta^{(m)})$, report an order-statistic coverage interval:
 
-Attribute via Sobol indices:
+$$\widehat{\mathrm{CI}}_{90\%}=\bigl[\,Y_{(\lceil0.05M\rceil)},\ Y_{(\lfloor0.95M\rfloor)}\,\bigr] \tag{9}$$
 
-$$S_i=\frac{\operatorname{Var}_{\theta_i}\!\bigl(\mathbb{E}[Y\mid\theta_i]\bigr)}{\operatorname{Var}(Y)},\qquad S_{T_i}=\frac{\mathbb{E}\bigl[\operatorname{Var}(Y\mid\theta_{\sim i})\bigr]}{\operatorname{Var}(Y)},\qquad S_{T_i}\ge S_i$$
+*In words —* run the model many times under the uncertainty, sort the scores, report the middle 90% as an honest range.
 
-$\arg\max_i S_{T_i}$ = the input whose verification most shrinks the band.
+Attribute via Sobol indices [13,14]:
 
-## 07 · Optimization
+$$S_i=\frac{\operatorname{Var}_{\theta_i}\!\bigl(\mathbb{E}[Y\mid\theta_i]\bigr)}{\operatorname{Var}(Y)},\qquad S_{T_i}=\frac{\mathbb{E}\bigl[\operatorname{Var}(Y\mid\theta_{\sim i})\bigr]}{\operatorname{Var}(Y)} \tag{10}$$
 
-Vector program $\min_p (-B(p),\ C(p))$; solution = Pareto front. Traced exactly by ε-constraint:
+*In words —* of all the wobble in the final score, how much is each uncertain input responsible for — telling you which fact to verify first.
 
-$$\max_p\ B(p)\quad\text{s.t.}\quad C(p)\le\varepsilon$$
+## 7. Optimization
 
-Weighted-sum $\max_p B(p)-\lambda C(p)$ is a supporting hyperplane of normal $(1,\lambda)$: recovers only $\partial\,\mathrm{conv}$ of the front, so on a non-convex front it *provably misses* concave regions for every $\lambda$. ε-constraint / NSGA-II do not. Small state space ⇒ exact inner solve is affordable.
+Multi-objective (max $B$, min $C$) → Pareto front, traced exactly by ε-constraint [15]:
 
-## 08 · Validation
+$$\max_p\ B(p)\quad\text{s.t.}\quad C(p)\le\varepsilon \tag{11}$$
 
-Test-driven (11 tests). Invariants: $\rho(\hat W)\le1$; resolvent $=$ truncated Neumann series to $10^{-8}$; sign propagation; real-substrate integration. Sign check — perturb $+1$, compare $\operatorname{sign}(x^{*})$ to raw edge signs ($\alpha=0.15$, $\rho(\hat W)=0.544$):
+*In words —* get the most benefit while keeping cost under a cap $\varepsilon$, then slide the cap to draw the whole trade-off curve.
+
+Weighted-sum $\max_p B-\lambda C$ is a supporting hyperplane of normal $(1,\lambda)$: recovers only the convex hull, so on a non-convex front it *provably misses* concave regions for every $\lambda$ [16,17]. ε-constraint does not.
+
+## 8. Validation
+
+Test-driven (11 tests): invariants include $\rho(\hat W)\le1$, resolvent (4) = truncated series to $10^{-8}$, sign propagation. Sign check — perturb $+1$, compare $\operatorname{sign}(x^{*})$ to raw edge signs ($\alpha=0.15$, $\rho=0.544$):
 
 | perturb | → target | edge | $x^{*}$ | check |
 |---|---|---|---|---|
@@ -124,20 +132,38 @@ Test-driven (11 tests). Invariants: $\rho(\hat W)\le1$; resolvent $=$ truncated 
 | `GSK3B ↑` | CREB1 | −1 | −0.0041 | ✓ inhib |
 | `AKT1 ↑` | NFKB1 | +1→−1 | −0.0008 | ✓ net-flip |
 
-**Hub-damping is observable:** 2-hop `NTRK2` ($+0.0080$) exceeds 1-hop `BDNF` ($+0.0030$) because $d^{\mathrm{out}}(\text{CREB1})\approx40$ divides its per-target transmission while $d^{\mathrm{out}}(\text{BDNF})=1$ transmits undivided — a direct consequence of $\hat W=WD_{\mathrm{out}}^{-1}$.
+Two-hop `NTRK2` ($+0.0080$) exceeds one-hop `BDNF` ($+0.0030$) because $d^{\mathrm{out}}(\text{CREB1})\approx40$ divides its transmission while $d^{\mathrm{out}}(\text{BDNF})=1$ — a direct consequence of (2).
 
-![telmisartan PPARG diabetes](assets/graph_telmisartan_diabetes.png)
+![Figure 6 — telmisartan → PPARG → diabetes](assets/graph_telmisartan_diabetes.png)
 
-Telmisartan → PPARG → type-2 diabetes: a single shared node (off-target PPARγ agonism).
+## 9. Groundedness and assumptions
 
-## 09 · Groundedness & assumptions
-
-- **Rungs:** brain-scoping (computed) > edge sign/direction (curated) > edge magnitude (mostly sign-only) > objective (hand-built $d$).
-- **Linearization:** $\hat W$ is the first-order Jacobian of the true nonlinear dynamics at baseline $x_0$; $x^{*}$ valid for small $\lVert x-x_0\rVert$. Large $\lVert p\rVert$ leaves the trust region (saturation, sign flips).
-- **Deliverable:** a ranking of interventions and the trade-off front — ordinal, robust to linearization — not fold-change magnitudes, not a protocol.
+Rungs: brain-scoping (computed) > edge sign/direction (curated) > edge magnitude (mostly sign-only) > objective (hand-built $d$). $\hat W$ is the first-order Jacobian at baseline, so $x^{*}$ is valid only for small $\lVert x-x_0\rVert$; large perturbations leave the trust region. Deliverable: an *ordinal* ranking + trade-off map, not fold-change magnitudes, not medical advice.
 
 ---
 
-**Stack:** PrimeKG · Neo4j · NetworkX · Personalized PageRank / APPNP · Liu–Barabási / Hopcroft–Karp · Kalman controllability · ε-constraint / Pareto · Monte-Carlo (GUM-S1) · Sobol indices
+## References
 
-[Overview](index.html) · [GitHub](https://github.com/DhruvSingh0905/cognitive-substrate-map) · personal learning project — not medical advice.
+1. Chandak, P., Huang, K., Zitnik, M. Building a knowledge graph to enable precision medicine. *Scientific Data* **10**, 67 (2023).
+2. Himmelstein, D.S. et al. Systematic integration of biomedical knowledge prioritizes drugs for repurposing. *eLife* **6**, e26726 (2017).
+3. Page, L., Brin, S., Motwani, R., Winograd, T. The PageRank Citation Ranking. *Stanford InfoLab* (1999).
+4. Gasteiger, J., Bojchevski, A., Günnemann, S. Predict then Propagate: GNNs meet Personalized PageRank (APPNP). *ICLR* (2019).
+5. Tong, H., Faloutsos, C., Pan, J-Y. Fast Random Walk with Restart and Its Applications. *ICDM* (2006).
+6. Kipf, T.N., Welling, M. Semi-Supervised Classification with Graph Convolutional Networks. *ICLR* (2017).
+7. Kalman, R.E. Mathematical Description of Linear Dynamical Systems. *J. SIAM Control* **1**(2), 152–192 (1963).
+8. Lin, C-T. Structural Controllability. *IEEE Trans. Automatic Control* **19**(3), 201–208 (1974).
+9. Liu, Y-Y., Slotine, J-J., Barabási, A-L. Controllability of complex networks. *Nature* **473**, 167–173 (2011).
+10. Hopcroft, J.E., Karp, R.M. An $n^{5/2}$ Algorithm for Maximum Matchings in Bipartite Graphs. *SIAM J. Comput.* **2**(4), 225–231 (1973).
+11. Gao, J., Liu, Y-Y., D'Souza, R.M., Barabási, A-L. Target control of complex networks. *Nature Communications* **5**, 5415 (2014).
+12. JCGM 101:2008. Propagation of distributions using a Monte Carlo method (GUM Supplement 1). *BIPM* (2008).
+13. Sobol, I.M. Global sensitivity indices for nonlinear models and their Monte Carlo estimates. *Math. Comput. Simul.* **55**, 271–280 (2001).
+14. Saltelli, A. et al. *Global Sensitivity Analysis: The Primer.* Wiley (2008).
+15. Haimes, Y.Y., Lasdon, L.S., Wismer, D.A. The ε-constraint method. *IEEE Trans. Syst. Man Cybern.* **1**(3), 296–297 (1971).
+16. Boyd, S., Vandenberghe, L. *Convex Optimization* (§4.7). Cambridge Univ. Press (2004).
+17. Marler, R.T., Arora, J.S. Survey of multi-objective optimization methods for engineering. *Struct. Multidiscip. Optim.* **26**, 369–395 (2004).
+18. Yerkes, R.M., Dodson, J.D. The relation of strength of stimulus to rapidity of habit-formation. *J. Comp. Neurol. Psychol.* **18**, 459–482 (1908).
+19. Arnsten, A.F.T. Stress signalling pathways that impair prefrontal cortex structure and function. *Nat. Rev. Neurosci.* **10**, 410–422 (2009).
+
+---
+
+[Project overview](index.html) · [source code](https://github.com/DhruvSingh0905/cognitive-substrate-map) · personal learning project — not medical advice.
