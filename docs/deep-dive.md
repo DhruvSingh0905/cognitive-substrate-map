@@ -4,127 +4,127 @@
 
 > ⚠️ **Status — work in progress.** This is a personal learning project, not a finished or peer-reviewed paper. The substrate, propagation engine, and controllability analysis are built and tested; the objective, uncertainty pass, and optimizer are laid out below but **not yet run**. Feedback very welcome.
 
-> **Overview.** This project treats a biomedical knowledge graph as a signed, directed control system and asks a simple question with a hard answer: which genes would you nudge, and by how much, to move the brain toward a state that's good for learning — without disturbing everything else? (The scoring objective, uncertainty pass, and optimizer described below are specified but not yet run.) Starting from PrimeKG [1] (129,375 nodes), we scope to a 280-node brain core (2,871 signed edges, a 200-node feedback component), propagate perturbations by random-walk-with-restart / Personalized PageRank [4], analyze structural controllability [9], define a set-point-aware objective, quantify uncertainty by Monte-Carlo propagation [12] with Sobol attribution [13], and trace the benefit–cost Pareto front by the ε-constraint method [15]. Validated by sign-consistency against curated regulatory edges (8/8). The deliverable is a *ranking* of interventions and a trade-off map — not fold-change predictions, and not a protocol.
+> **Overview.** This project treats a biomedical knowledge graph as a signed, directed control system and asks a simple question with a hard answer: which genes would you nudge, and by how much, to move the brain toward a state that's good for learning — without disturbing everything else? (The scoring objective, uncertainty pass, and optimizer described below are specified but not yet run.)
 
-**Keywords:** knowledge graphs · network propagation · structural controllability · multi-objective optimization · computational neuroscience
-
-*(Academic-styled HTML version: [deep-dive.html](deep-dive.html))*
+*Academic-styled HTML version: [deep-dive.html](deep-dive.html)*
 
 ## 1. Substrate
 
-Base graph: PrimeKG [1] ($|V|=129{,}375$, $|E|\approx4.05\times10^{6}$, 10 node types, 30 edge types); lineage is the Hetionet / Rephetio hetnet for drug repurposing via metapath scoring [2].
+The base graph is PrimeKG [1] — 129,375 nodes and about 4 million edges across ten types (genes, drugs, diseases, pathways, and so on), from the Hetionet / Rephetio line of work [2].
 
-**Brain-scoping.** Retain gene $v$ by tissue-expression enrichment over PrimeKG `anatomy_protein_present` edges $E_a$:
+Most of that graph has nothing to do with learning, so I keep only genes mostly expressed in brain tissue. The score for a gene $v$ is the fraction of the tissues it appears in that are brain, over PrimeKG's `anatomy_protein_present` edges $E_a$:
 
 $$e(v)=\frac{\bigl|\{a:(v,a)\in E_a,\ a\in A_{\mathrm{brain}}\}\bigr|}{\bigl|\{a:(v,a)\in E_a\}\bigr|},\qquad \text{keep if } e(v)\ge 0.15 \ \wedge\ \deg_a(v)\ge 5 \tag{1}$$
 
-*In words —* keep a gene only if a meaningful fraction of the tissues it is expressed in are brain tissues, and only if it is expressed in enough places for that fraction to be trustworthy.
+*In words —* keep a gene only if a decent share of the tissues it's active in are brain, and only if it's active in enough places for that share to mean something.
 
-Post-prune: $N=280$ (intervention 70, input 15, readout 6, trap 2, expansion 187), $3912$ directed edges, $2871$ signed ($+{:}\,2253,\ -{:}\,618$), one SCC of $200$.
+After pruning: 280 nodes in four layers (70 intervention, 15 input, 6 readout, 2 off-limits, 187 one-hop neighbors), 3,912 directed edges (2,871 signed: 2,253 activating, 618 inhibiting), one 200-node feedback loop.
 
-![Figure 1 — knowledge graph slice](assets/graph_bio_graph.png)
-
-![Figure 2 — the 280-node substrate](assets/graph_brain_substrate.png)
+![Figure 1 — the 280-node substrate](assets/graph_brain_substrate.png)
 
 ## 2. The propagation operator
 
-Signed adjacency $W\in\{-1,0,+1\}^{N\times N}$, oriented so $(Wx)_i$ is influx to $i$: $W_{ij}=\operatorname{sign}(j\to i)$. Out-strength $d^{\mathrm{out}}_j=\sum_i|W_{ij}|$; column-normalize into the Personalized-PageRank transition [3]:
+Put the edges in a matrix $W$: the entry $W_{ij}$ is $+1$, $-1$, or $0$ for the effect of gene $j$ on gene $i$. A hub gene with many out-edges would swamp everything, so divide each gene's column by its out-degree — the PageRank trick [3] ($d^{\mathrm{out}}_j=\sum_i|W_{ij}|$):
 
 $$\hat{W}=W\,D_{\mathrm{out}}^{-1},\qquad \hat{W}_{ij}=\frac{W_{ij}}{\sum_k|W_{kj}|} \tag{2}$$
 
-*In words —* split each gene's outgoing influence evenly across the targets it regulates, so a hub gene that talks to everyone cannot dominate.
+*In words —* spread each gene's outgoing effect evenly across the genes it points at, so one gene that talks to everyone can't dominate.
 
-$|\hat{W}|$ is column-stochastic, so by Perron–Frobenius $\rho(\hat{W})\le1$ (measured: $0.544$), guaranteeing §3 converges. Column normalization suits a *directed* graph (promiscuity is an out-degree property); the symmetric GCN form $D^{-1/2}\tilde{W}D^{-1/2}$ [6] is the undirected analogue.
+Each column now sums to 1 in absolute value, forcing the largest eigenvalue to be $\le 1$ (Perron–Frobenius) and keeping the next step stable (measured: $\rho(\hat W)=0.544$). Dividing by out-degree suits a *directed* graph; the symmetric GCN form $D^{-1/2}\tilde W D^{-1/2}$ [6] is for undirected graphs.
 
-![Figure 3 — MTOR hub](assets/graph_mtor_hub.png)
+![Figure 2 — out-degree is heavy-tailed](assets/fig_outdegree.png)
 
 ## 3. Propagation by random-walk-with-restart
 
-Source $p\in\mathbb{R}^N$, restart probability $\alpha$ [5,4]:
+Push a signal $p$ into one gene and let it spread, pulling a fraction $\alpha$ back to the source each step [5,4]:
 
 $$x^{(t+1)}=(1-\alpha)\,\hat{W}x^{(t)}+\alpha\,p \tag{3}$$
 
-*In words —* at every step, spread the signal one hop, but yank a fixed fraction $\alpha$ back to the gene you started from.
+*In words —* at each step, spread the signal one hop, but yank a fixed slice $\alpha$ back to the gene you started from.
 
-Fixed point solves $(I-(1-\alpha)\hat{W})x^{*}=\alpha p$; since $\rho((1-\alpha)\hat{W})\le1-\alpha<1$ it equals its Neumann series:
+Solving for the value it settles to gives a closed form (a sum over every path length $k$):
 
 $$x^{*}=\alpha\bigl(I-(1-\alpha)\hat{W}\bigr)^{-1}p=\alpha\sum_{k\ge0}(1-\alpha)^{k}\hat{W}^{k}p \tag{4}$$
 
-*In words —* the settled-down response; equivalently, sum the signal over every path length $k$, each discounted by $(1-\alpha)^k$, so distant hops fade exponentially.
+*In words —* the settled response; each extra hop is discounted by $(1-\alpha)^k$, so far-away genes barely feel it.
 
-Mean radius $\bar k=(1-\alpha)/\alpha\approx5.7$ at $\alpha=0.15$. As $\alpha\to0$, $x^{*}\to$ leading eigenvector of $\hat W$ (over-smoothing), which the decay prevents. The 200-node SCC is why a steady-state resolvent is required.
+Far hops are discounted, so the effect stays local. The 200-node feedback loop is why we solve for a settled value instead of one push.
 
-![Figure 4 — random walk with restart](assets/diagram_rwr.png)
+![Figure 3 — measured decay vs hop distance](assets/fig_decay.png)
 
 ## 4. Controllability
 
-LTI form with input map $B\in\mathbb{R}^{N\times m}$: $\dot{x}=Wx+Bu$. Controllable iff (Kalman [7]):
+Can a few inputs steer the whole thing? As a linear system with input map $B$, $\dot{x}=Wx+Bu$, it's fully steerable when the controllability matrix has full rank (Kalman [7]):
 
 $$\operatorname{rank}\mathcal{C}=N,\qquad \mathcal{C}=[\,B,\ WB,\ W^{2}B,\ \dots,\ W^{N-1}B\,] \tag{5}$$
 
-*In words —* you can reach any state exactly when your inputs, pushed through successive hops, together span all $N$ dimensions.
+*In words —* you can reach any state exactly when your inputs, pushed through more and more hops, together cover all $N$ directions.
 
-Structural controllability (Lin [8]; Liu–Slotine–Barabási [9]): minimum drivers = nodes left unmatched by a maximum matching $M^{*}$:
+Testing that directly is impractical, so I use structural controllability (Lin [8]; Liu–Slotine–Barabási [9]): the fewest genes you must control is the number left unmatched after pairing up the network as well as possible,
 
 $$N_{D}=\max\bigl(N-|M^{*}|,\ 1\bigr) \tag{6}$$
 
-*In words —* the fewest genes you must control is the number left over after pairing up the network as efficiently as possible.
+*In words —* match each gene to one it directly drives; whatever's left over is what you control by hand.
 
-Matching via Hopcroft–Karp [10] in $O(|E|\sqrt N)$; $\langle k\rangle\propto1/N_D$. Result: all 280 reachable, full control needs $N_D=81$ (35 druggable) — arbitrary-state control fails, but **target control** [11] of the readout subset needs $\le N_D$ inputs and is feasible.
+Matching via Hopcroft–Karp [10]. Result: all 280 reachable, but full control needs **81 driver genes, only 37 druggable** — so you can't push it to any state. You *can* steer the readouts you care about (target control [11]), which takes fewer inputs.
+
+![Figure 4 — driver nodes on the substrate](assets/fig_drivers.png)
 
 | quantity | value |
 |---|---|
 | druggable inputs \|𝒟\| | 172 |
 | reachable \|R\|/N | 280 / 280 |
 | min drivers N_D (full) | 81 |
-| drivers druggable | 35 / 81 |
+| drivers druggable | 37 / 81 |
 | feedback SCC | 200 |
 
 ## 5. Target state and objective
 
-Target deviation $d\in\mathbb{R}^N$. Most cognitive variables are set-points with an inverted-U (Yerkes–Dodson [18]; Arnsten [19]). Benefit = distance-reduction to the target:
+The target is a vector $d$ of desired changes. Key fact: most brain variables have a sweet spot, an inverted-U (Yerkes–Dodson [18]; Arnsten [19]) — dopamine, arousal, cortisol, E/I balance, mTOR. Benefit is how much closer to the target you get:
 
 $$b_i=\lvert d_i\rvert-\lvert x^{*}_i-d_i\rvert \tag{7}$$
 
-*In words —* how much closer to the ideal level this gene got: positive for moving toward the target, negative for overshooting.
+*In words —* positive if the nudge moved a gene toward its ideal level, negative if it pushed past it.
 
-Aggregate ($w_i$ = confidence, readouts $w_i=0$) and cost ($L_1$ effort + off-target collateral):
+Total benefit weights each gene by confidence (readouts count 0); cost is effort plus off-target movement:
 
 $$B(p)=\sum_i w_i\,b_i,\qquad C(p)=\lVert p\rVert_1+\gamma\sum_{j\,\notin\,T}\lvert x^{*}_j\rvert \tag{8}$$
 
-*In words —* total good across genes, against total cost: how hard you pushed plus how much you disturbed things outside the target set.
+*In words —* add up the good across genes, then subtract the cost: effort plus collateral elsewhere.
 
-Curated vector: 94 genes, 43 set-point / 30 up / 12 down.
+Current target vector: 94 genes, 43 set-point / 30 up / 12 down.
 
-![Figure 5 — target set](assets/graph_target_set.png)
+![Figure 5 — the target set](assets/graph_target_set.png)
 
 ## 6. Uncertainty quantification
 
-Uncertain inputs $\theta$ (confidence-weight intervals + sign-only magnitudes). Monte-Carlo (GUM-S1 [12]): draw $\theta^{(m)}$, evaluate $Y^{(m)}=B(p;\theta^{(m)})$, report an order-statistic coverage interval:
+Many edge strengths are known only by sign, so a single number would be overconfident. The plan: run the model many times over that uncertainty (Monte-Carlo [12]) and report a range,
 
 $$\widehat{\mathrm{CI}}_{90\%}=\bigl[\,Y_{(\lceil0.05M\rceil)},\ Y_{(\lfloor0.95M\rfloor)}\,\bigr] \tag{9}$$
 
-*In words —* run the model many times under the uncertainty, sort the scores, report the middle 90% as an honest range.
+*In words —* run it many times, sort the scores, report the middle 90% as an honest range.
 
-Attribute via Sobol indices [13,14]:
+Then use Sobol indices [13,14] to see which unknown drives the range:
 
 $$S_i=\frac{\operatorname{Var}_{\theta_i}\!\bigl(\mathbb{E}[Y\mid\theta_i]\bigr)}{\operatorname{Var}(Y)},\qquad S_{T_i}=\frac{\mathbb{E}\bigl[\operatorname{Var}(Y\mid\theta_{\sim i})\bigr]}{\operatorname{Var}(Y)} \tag{10}$$
 
-*In words —* of all the wobble in the final score, how much is each uncertain input responsible for — telling you which fact to verify first.
+*In words —* of all the wobble in the score, how much comes from each unknown — so you know which fact to check first.
 
 ## 7. Optimization
 
-Multi-objective (max $B$, min $C$) → Pareto front, traced exactly by ε-constraint [15]:
+No single best answer — more benefit usually costs more — so the output is a trade-off curve (Pareto front), traced with the ε-constraint method [15]:
 
 $$\max_p\ B(p)\quad\text{s.t.}\quad C(p)\le\varepsilon \tag{11}$$
 
-*In words —* get the most benefit while keeping cost under a cap $\varepsilon$, then slide the cap to draw the whole trade-off curve.
+*In words —* squeeze out the most benefit at each cost budget, then vary the budget to draw the whole curve.
 
-Weighted-sum $\max_p B-\lambda C$ is a supporting hyperplane of normal $(1,\lambda)$: recovers only the convex hull, so on a non-convex front it *provably misses* concave regions for every $\lambda$ [16,17]. ε-constraint does not.
+A plain weighted sum would quietly skip part of the curve when it bends the wrong way (non-convex) [16,17]; ε-constraint doesn't.
 
 ## 8. Validation
 
-Test-driven (11 tests): invariants include $\rho(\hat W)\le1$, resolvent (4) = truncated series to $10^{-8}$, sign propagation. Sign check — perturb $+1$, compare $\operatorname{sign}(x^{*})$ to raw edge signs ($\alpha=0.15$, $\rho=0.544$):
+Test-driven (11 tests). The main check: push one gene by $+1$ and confirm the response sign matches the edge sign in the database — not the model. All eight match ($\alpha=0.15$, $\rho=0.544$):
+
+![Figure 6 — predicted signs vs curated edges](assets/fig_signcheck.png)
 
 | perturb | → target | edge | $x^{*}$ | check |
 |---|---|---|---|---|
@@ -134,17 +134,15 @@ Test-driven (11 tests): invariants include $\rho(\hat W)\le1$, resolvent (4) = t
 | `GSK3B ↑` | CREB1 | −1 | −0.0041 | ✓ inhib |
 | `AKT1 ↑` | NFKB1 | +1→−1 | −0.0008 | ✓ net-flip |
 
-Two-hop `NTRK2` ($+0.0080$) exceeds one-hop `BDNF` ($+0.0030$) because $d^{\mathrm{out}}(\text{CREB1})\approx40$ divides its transmission while $d^{\mathrm{out}}(\text{BDNF})=1$ — a direct consequence of (2).
-
-![Figure 6 — telmisartan → PPARG → diabetes](assets/graph_telmisartan_diabetes.png)
+One nice check: two-hop `NTRK2` moves more than one-hop `BDNF`, because CREB1's ~40 out-edges split its signal while BDNF's single out-edge passes it straight through — exactly what (2) predicts.
 
 ## 9. Groundedness and assumptions
 
-Rungs: brain-scoping (computed) > edge sign/direction (curated) > edge magnitude (mostly sign-only) > objective (hand-built $d$). $\hat W$ is the first-order Jacobian at baseline, so $x^{*}$ is valid only for small $\lVert x-x_0\rVert$; large perturbations leave the trust region. Deliverable: an *ordinal* ranking + trade-off map, not fold-change magnitudes, not medical advice.
+The layers rest on different evidence: brain-scoping is computed, edge signs are curated, edge strengths are mostly sign-only, and the target vector is hand-built. $\hat W$ is a linear (first-order) stand-in for nonlinear biology, so results hold for small nudges near the resting state, not big ones. Output: an ordered list of interventions and a trade-off map — not exact fold-changes, not medical advice.
 
 ## 10. Status & roadmap
 
-**Built and tested so far:** the substrate (§1), the propagation operator + RWR engine (§2–3), the controllability analysis (§4). **Written out here but not yet run:** the set-point objective (§5), the Monte-Carlo uncertainty pass (§6), the ε-constraint optimizer (§7) — the active work. **Further out:** real edge magnitudes where data exists, and a nonlinear cross-check of the linear propagation. A living write-up; it will change as those pieces land.
+**Built and tested so far:** the substrate (§1), the propagation operator + RWR engine (§2–3), the controllability analysis (§4). **Written out here but not yet run:** the set-point objective (§5), the Monte-Carlo uncertainty pass (§6), the ε-constraint optimizer (§7) — the active work. **Further out:** real edge strengths where data exists, and a nonlinear cross-check. A living write-up; it will change as those pieces land.
 
 ---
 
