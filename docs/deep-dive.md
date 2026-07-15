@@ -98,7 +98,7 @@ Current target vector: 94 genes, 43 set-point / 30 up / 12 down.
 
 ## 6. Uncertainty quantification
 
-Many edge strengths are known only by sign, so a single number would be overconfident. The plan: run the model many times over that uncertainty (Monte-Carlo [12]) and report a range,
+Our confidence in each target isn't uniform — some directions are well-established, others shaky — so a single score would overstate precision. We run it many times, sampling each target's confidence weight within its interval (Monte-Carlo [12]), and report a range,
 
 $$\widehat{\mathrm{CI}}_{90\%}=\bigl[\,Y_{(\lceil0.05M\rceil)},\ Y_{(\lfloor0.95M\rfloor)}\,\bigr] \tag{9}$$
 
@@ -109,6 +109,8 @@ Then use Sobol indices [13,14] to see which unknown drives the range:
 $$S_i=\frac{\operatorname{Var}_{\theta_i}\!\bigl(\mathbb{E}[Y\mid\theta_i]\bigr)}{\operatorname{Var}(Y)},\qquad S_{T_i}=\frac{\mathbb{E}\bigl[\operatorname{Var}(Y\mid\theta_{\sim i})\bigr]}{\operatorname{Var}(Y)} \tag{10}$$
 
 *In words —* of all the wobble in the score, how much comes from each unknown — so you know which fact to check first.
+
+Edge *strengths* are deliberately left out: they're treated as sign-only (unit weight), because there's no principled distribution to sample — inventing one would add noise, not information.
 
 ## 7. Optimization
 

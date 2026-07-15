@@ -172,9 +172,9 @@
     direction — green up, red down, gold set-point.</figcaption></figure>
 
   <h2>6. Uncertainty quantification</h2>
-  <p>Many edge strengths are known only by sign, so a single number would be overconfident. The plan: run the model
-  many times over that uncertainty (Monte-Carlo<sup><a href="#r12">[12]</a></sup>) and report a range instead of a
-  point,</p>
+  <p>Our confidence in each target isn't uniform — some directions are well-established, others shaky — so a single
+  score would overstate precision. We run it many times, sampling each target's confidence weight within its interval
+  (Monte-Carlo<sup><a href="#r12">[12]</a></sup>), and report a range instead of a point,</p>
   <div class="eqwrap">$$\widehat{\mathrm{CI}}_{90\%}=\bigl[\,Y_{(\lceil0.05M\rceil)},\ Y_{(\lfloor0.95M\rfloor)}\,\bigr] \tag{9}$$</div>
   <p class="gloss"><span class="h">In words —</span> run it many times, sort the scores, and report the middle 90% as
   an honest range.</p>
@@ -184,6 +184,8 @@
     \qquad S_{T_i}=\frac{\mathbb{E}\bigl[\operatorname{Var}(Y\mid\theta_{\sim i})\bigr]}{\operatorname{Var}(Y)} \tag{10}$$</div>
   <p class="gloss"><span class="h">In words —</span> of all the wobble in the score, how much comes from each unknown —
   so you know which fact to go check first.</p>
+  <p>Edge <em>strengths</em> are deliberately left out of this: they're treated as sign-only (unit weight), because
+  there's no principled distribution to sample — inventing one would add noise, not information.</p>
 
   <h2>7. Optimization</h2>
   <p>There's no single best answer — more benefit usually costs more — so the output is a trade-off curve (a Pareto
