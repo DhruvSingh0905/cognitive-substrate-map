@@ -2,9 +2,9 @@
 
 **Dhruv Singh** · Work in progress · a personal project · July 2026
 
-> ⚠️ **Status — work in progress.** This is a personal learning project, not a finished or peer-reviewed paper. The substrate, propagation engine, and controllability analysis are built and tested; the objective, uncertainty pass, and optimizer are laid out below but **not yet run**. Feedback very welcome.
+> ⚠️ **Status — core pipeline complete (work in progress).** A personal learning project, not peer-reviewed. The full chain now runs end to end — substrate, propagation, controllability, objective, uncertainty, optimizer — with a first result (§7) that survives a nonlinear cross-check (§8). Refinement continues; feedback welcome.
 
-> **Overview.** This project treats a biomedical knowledge graph as a signed, directed control system and asks a simple question with a hard answer: which genes would you nudge, and by how much, to move the brain toward a state that's good for learning — without disturbing everything else? (The scoring objective, uncertainty pass, and optimizer described below are specified but not yet run.)
+> **Overview.** This project treats a biomedical knowledge graph as a signed, directed control system and asks a simple question with a hard answer: which genes would you nudge, and by how much, to move the brain toward a state that's good for learning — without disturbing everything else? The scoring objective, uncertainty pass, and optimizer now run end to end: one high-leverage node — **BDNF** — stands out, with a small optimal set and sharp diminishing returns rather than a synergistic drug stack, and the finding holds under a nonlinear cross-check.
 
 *Academic-styled HTML version: [deep-dive.html](deep-dive.html)*
 
@@ -122,11 +122,19 @@ $$\max_p\ B(p)\quad\text{s.t.}\quad C(p)\le\varepsilon \tag{11}$$
 
 A plain weighted sum would quietly skip part of the curve when it bends the wrong way (non-convex) [16,17]; ε-constraint doesn't.
 
+**Result.** Scoring every actionable knob (downstream effect only), one gene stands out: pushing **BDNF** up gives ~5× the downstream benefit of the next-best knob, and under the §6 confidence-weight uncertainty it's the #1 knob in **100%** of 2,000 draws (narrow band).
+
+![Figure 6 — single-knob ranking with confidence bands](assets/knob_bands.png)
+
+Searching combinations (all singles/pairs/triples + a greedy path), the benefit–cost front has a **sharp knee at BDNF** — it captures most of the achievable downstream benefit at low cost, and adding knobs gives steep diminishing returns. The top plasticity knobs are *redundant* (overlapping downstream), so there's no synergistic stack; the optimal set is small.
+
+![Figure 7 — benefit–cost Pareto front](assets/pareto_front.png)
+
 ## 8. Validation
 
-Test-driven (11 tests). The main check: push one gene by $+1$ and confirm the response sign matches the edge sign in the database — not the model. All eight match ($\alpha=0.15$, $\rho=0.544$):
+Test-driven throughout — each stage is gated by unit tests. The main sign check: push one gene by $+1$ and confirm the response sign matches the edge sign in the database — not the model. All eight match ($\alpha=0.15$, $\rho=0.544$):
 
-![Figure 6 — predicted signs vs curated edges](assets/fig_signcheck.png)
+![Figure 8 — predicted signs vs curated edges](assets/fig_signcheck.png)
 
 | perturb | → target | edge | $x^{*}$ | check |
 |---|---|---|---|---|
@@ -138,13 +146,17 @@ Test-driven (11 tests). The main check: push one gene by $+1$ and confirm the re
 
 One nice check: two-hop `NTRK2` moves more than one-hop `BDNF`, because CREB1's ~40 out-edges split its signal while BDNF's single out-edge passes it straight through — exactly what (2) predicts.
 
+**Nonlinear cross-check.** The engine is linear, so the headline could be an artifact of that. Re-running the ranking under a saturating (tanh) propagation, pushing knobs deep into the nonlinear regime: **BDNF stays #1 at every strength** (its lead grows as the system saturates), and combinations stay roughly additive (no synergy). The finding survives.
+
+![Figure 9 — nonlinear pressure test](assets/pressure_test.png)
+
 ## 9. Groundedness and assumptions
 
 The layers rest on different evidence: brain-scoping is computed, edge signs are curated, edge strengths are mostly sign-only, and the target vector is hand-built. $\hat W$ is a linear (first-order) stand-in for nonlinear biology, so results hold for small nudges near the resting state, not big ones. Output: an ordered list of interventions and a trade-off map — not exact fold-changes, not medical advice.
 
 ## 10. Status & roadmap
 
-**Built and tested so far:** the substrate (§1), the propagation operator + RWR engine (§2–3), the controllability analysis (§4). **Written out here but not yet run:** the set-point objective (§5), the Monte-Carlo uncertainty pass (§6), the ε-constraint optimizer (§7) — the active work. **Further out:** real edge strengths where data exists, and a nonlinear cross-check. A living write-up; it will change as those pieces land.
+**Built, tested, and run:** the full pipeline — substrate (§1), operator + RWR engine (§2–3), controllability (§4), the objective (§5), the uncertainty pass (§6), the ε-constraint optimizer (§7), and the nonlinear cross-check (§8). **Further out:** real edge strengths where measured data exists, a richer intervention model (dose, timing), and validation against real perturbation datasets. A living write-up.
 
 ---
 

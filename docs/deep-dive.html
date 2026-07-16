@@ -52,10 +52,10 @@
   <p class="authors">Dhruv Singh</p>
   <p class="meta">Work in progress · a personal project · July 2026 · code at github.com/DhruvSingh0905/cognitive-substrate-map</p>
 
-  <div class="status"><strong>Status — work in progress.</strong> This is a personal learning project, not a finished
-  or peer-reviewed paper. The knowledge-graph substrate, the propagation engine, and the controllability analysis are
-  built and tested; the objective, the uncertainty pass, and the optimizer are laid out below but <em>not yet run</em>.
-  I'm sharing the approach and the parts that work — feedback very welcome.</div>
+  <div class="status"><strong>Status — core pipeline complete (work in progress).</strong> This is a personal
+  learning project, not a finished or peer-reviewed paper. The full chain now runs end to end — substrate, propagation,
+  controllability, objective, uncertainty, and optimizer — with a first result (§7) that survives a nonlinear
+  cross-check (§8). Refinement continues; feedback very welcome.</div>
 
   <div class="abstract">
     <p><span class="h">Overview.</span> This project treats a biomedical knowledge graph as a signed, directed control
@@ -65,10 +65,11 @@
     edges, with a 200-node feedback loop), push perturbations through it with a
     random-walk-with-restart<sup><a href="#r4">[4]</a></sup>, and use control theory<sup><a href="#r9">[9]</a></sup> to
     ask what the network can even be steered to. The scoring objective, the uncertainty
-    analysis<sup><a href="#r12">[12]</a></sup>, and the optimizer<sup><a href="#r15">[15]</a></sup> are written out
-    below but <em>not yet run</em> — that's the next phase. What is built is checked by comparing its predicted signs
-    against curated regulatory edges (8/8). The eventual output is a <em>ranking</em> of interventions and a trade-off
-    map — not fold-change predictions, and not a protocol.</p>
+    analysis<sup><a href="#r12">[12]</a></sup>, and the optimizer<sup><a href="#r15">[15]</a></sup> now run end to end.
+    The result: one high-leverage node — <strong>BDNF</strong> — stands out, with a <em>small</em> optimal set and
+    sharp diminishing returns rather than any synergistic drug stack, and the finding holds under a nonlinear
+    cross-check. What's built is checked by comparing predicted signs against curated edges (8/8). The output is a
+    <em>ranking</em> of interventions and a trade-off map — not fold-change predictions, and not a protocol.</p>
   </div>
   <hr class="rule">
 
@@ -197,12 +198,30 @@
   <p>A plain weighted sum, $\max_p B(p)-\lambda C(p)$, would quietly skip part of the curve when it bends the wrong way
   (a non-convex front)<sup><a href="#r16">[16]</a>,<a href="#r17">[17]</a></sup>; ε-constraint doesn't, and the small
   size makes it cheap to run.</p>
+  <p><strong>Result.</strong> Scoring every actionable knob (pushed in its target direction, and counting only the
+  <em>downstream</em> effect so a gene isn't just credited for moving itself), one gene stands out: pushing
+  <strong>BDNF</strong> up gives roughly 5× the downstream benefit of the next-best knob. Under the confidence-weight
+  uncertainty of §6, it is the #1 knob in <em>100%</em> of 2,000 draws, with a narrow band — the ranking rests on
+  high-confidence targets, not shaky ones.</p>
+  <figure><span class="frame"><img src="assets/knob_bands.png" alt="knob ranking with confidence bands"></span>
+    <figcaption><span class="fn">Figure 6.</span> Single-knob ranking by downstream benefit, with 10–90% confidence
+    bands. BDNF is decisively #1; the remaining knobs sit near zero.</figcaption></figure>
+  <p>Searching combinations (all singles, pairs and triples plus a greedy path), the benefit–cost front has a
+  <strong>sharp knee at BDNF</strong>: it captures most of the achievable downstream benefit at low cost, and adding
+  more knobs gives steep diminishing returns. The top plasticity knobs are <em>redundant</em> — they feed overlapping
+  downstream — so there is no synergistic stack, and the optimal set is small. Most combinations sit at or below zero
+  benefit; the useful ones are a thin envelope.</p>
+  <figure><span class="frame"><img src="assets/pareto_front.png" alt="benefit-cost Pareto front"></span>
+    <figcaption><span class="fn">Figure 7.</span> Benefit–cost Pareto front over knob combinations. The near-vertical
+    jump to BDNF followed by a flat plateau is the diminishing-returns signature — polypharmacy doesn't pay here.</figcaption></figure>
 
   <h2>8. Validation</h2>
-  <p>The engine is test-driven (11 tests). The main check: push one gene by $+1$ and confirm the response sign matches
-  the edge sign in the database — not the model. All eight match ($\alpha=0.15$, $\rho(\hat W)=0.544$).</p>
+  <p>The engine is test-driven throughout — each stage is gated by unit tests (sign propagation, the resolvent, the
+  objective, the confidence bands, the Pareto front, and the nonlinear map). The main sign check: push one gene by
+  $+1$ and confirm the response sign matches the edge sign in the database — not the model. All eight match
+  ($\alpha=0.15$, $\rho(\hat W)=0.544$).</p>
   <figure><span class="frame"><img src="assets/fig_signcheck.png" alt="sign check"></span>
-    <figcaption><span class="fn">Figure 6.</span> Perturb a gene, read the response at a target: green is up, red is
+    <figcaption><span class="fn">Figure 8.</span> Perturb a gene, read the response at a target: green is up, red is
     down, and each bar's label is the edge sign it should match. All eight agree, including two-hop sign flips.</figcaption></figure>
   <table><caption><span class="fn">Table 2.</span> Sign consistency: unit perturbation vs. curated edge sign.</caption>
     <thead><tr><th>perturb</th><th>→ target</th><th>edge</th><th>$x^{*}$</th><th>check</th></tr></thead>
@@ -217,6 +236,14 @@
   <p>One nice check on the operator: two-hop <code>NTRK2</code> moves more than one-hop <code>BDNF</code>, because
   CREB1's ~40 out-edges split its signal while BDNF's single out-edge passes it straight through — exactly what
   equation (2) predicts.</p>
+  <h3>Nonlinear cross-check</h3>
+  <p>The whole engine is linear, so the headline (§7) could be an artifact of that. We re-ran the ranking under a
+  <em>saturating</em> (tanh) propagation and pushed knobs progressively harder into the nonlinear regime, where the
+  linear approximation is meant to break. <strong>BDNF stays #1 at every strength</strong> — its lead actually widens
+  as the system saturates — and combinations stay roughly additive, so no synergy appears. The finding survives.</p>
+  <figure><span class="frame"><img src="assets/pressure_test.png" alt="nonlinear pressure test"></span>
+    <figcaption><span class="fn">Figure 9.</span> Downstream benefit vs. perturbation strength under the saturating
+    map. BDNF's lead grows as the push saturates — the result is not a linearity artifact.</figcaption></figure>
 
   <h2>9. Groundedness and assumptions</h2>
   <p>The layers rest on different evidence: brain-scoping is computed, edge signs are curated from causal databases,
@@ -225,11 +252,11 @@
   output is an ordered list of interventions and a trade-off map — not exact fold-changes, and not medical advice.</p>
 
   <h2>10. Status &amp; roadmap</h2>
-  <p><strong>Built and tested so far:</strong> the brain-scoped substrate (§1), the propagation operator and RWR
-  engine (§2–3), and the structural-controllability analysis (§4). <strong>Written out here but not yet run:</strong>
-  the set-point objective (§5), the Monte-Carlo uncertainty pass (§6), and the ε-constraint optimizer (§7) — this is
-  the active work. <strong>Further out:</strong> fitting real edge strengths where data exists, and a nonlinear
-  cross-check of the linear propagation. This is a living write-up; it will change as those pieces land.</p>
+  <p><strong>Built, tested, and run:</strong> the full pipeline — substrate (§1), operator and RWR engine (§2–3),
+  controllability (§4), the set-point objective (§5), the uncertainty pass (§6), the ε-constraint optimizer (§7), and
+  the nonlinear cross-check (§8). <strong>Further out:</strong> fitting real edge strengths where measured data exists,
+  a richer intervention model (dose, timing), and validation against real perturbation datasets. This is a living
+  write-up; it will change as those pieces land.</p>
 
   <hr class="rule">
   <h2>References</h2>

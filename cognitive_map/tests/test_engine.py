@@ -92,6 +92,27 @@ def test_resolvent_matches_truncated_series():
     assert np.allclose(series, closed, atol=1e-8)
 
 
+def test_nonlinear_reduces_to_linear_at_small_signal():
+    """tanh(x)≈x for tiny x, so the saturating fixed point matches the linear resolvent."""
+    nodes = list("ABCPQR")
+    W, idx = op.signed_weight_matrix(_two_chains(), nodes)
+    What = op.normalize(W)
+    p = np.zeros(len(nodes)); p[idx["A"]] = 0.001
+    lin = pr.steady_state_vector(What, p, alpha=0.15)
+    nl = pr.nonlinear_steady_state_vector(What, p, alpha=0.15)
+    assert np.allclose(lin, nl, atol=1e-6)
+
+
+def test_nonlinear_saturates_large_signal():
+    """A big push cannot drive a node past ~1 (the tanh ceiling)."""
+    nodes = list("ABCPQR")
+    What = op.normalize(op.signed_weight_matrix(_two_chains(), nodes)[0])
+    p = np.zeros(len(nodes)); p[nodes.index("A")] = 50.0
+    nl = pr.nonlinear_steady_state_vector(What, p, alpha=0.15)
+    downstream = np.delete(nl, nodes.index("A"))     # exclude the directly-driven source
+    assert np.all(np.abs(downstream) <= 1.0 + 1e-9)
+
+
 def test_off_target_unreached_stays_zero():
     """A node on a disconnected chain must not move when we perturb the other chain."""
     x = pr.steady_state(_two_chains(), list("ABCPQR"), {"A": 1.0}, alpha=0.15)

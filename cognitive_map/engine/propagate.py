@@ -33,6 +33,20 @@ def steady_state(edges: pd.DataFrame, nodes: list, perturbation: dict,
     return {g: float(x[idx[g]]) for g in nodes}
 
 
+def nonlinear_steady_state_vector(What: np.ndarray, p: np.ndarray, alpha: float = 0.15,
+                                  iters: int = 400) -> np.ndarray:
+    """Saturating fixed point:  x = (1−α)·Ŵ·tanh(x) + α·p.
+
+    tanh squashes each node's state before it propagates — a Hill-like ceiling. For small |x|,
+    tanh(x)≈x so this reduces to the linear resolvent; for large |x| it saturates. The map is a
+    contraction ((1−α)·ρ(Ŵ)<1, tanh is 1-Lipschitz), so it converges to a unique fixed point.
+    """
+    x = p.copy()
+    for _ in range(iters):
+        x = (1 - alpha) * (What @ np.tanh(x)) + alpha * p
+    return x
+
+
 def is_oversmoothed(x: np.ndarray, tol: float = 1e-6) -> bool:
     """Over-smoothing diagnostic: True if the response collapsed to ~uniform (lost signal)."""
     x = np.asarray(x, dtype=float)

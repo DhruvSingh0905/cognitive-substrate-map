@@ -51,21 +51,27 @@
   <p>The $(1-\alpha)^k$ decay damps deep hops (the over-smoothing guard); $x^{*}$ is each node's deviation from
   baseline.</p>
 
-  <h3>3 · Scoring — closeness to the target state <span class="next">(next)</span></h3>
+  <h3>3 · Scoring — closeness to the target state</h3>
   <p>Benefit rewards <i>movement toward</i> each target $d_i$ (overshoot flips negative — the inverted-U); cost
   prices intervention effort + systemic collateral:</p>
   <div class="eq">$$b_i = \lvert d_i\rvert - \lvert x^{*}_i - d_i\rvert, \qquad
     B(p)=\sum_i w_i\,b_i, \qquad C(p)=\lVert p\rVert_1 + \gamma\!\!\sum_{j\,\in\,\text{off-target}}\!\!\lvert x^{*}_j\rvert$$</div>
 
-  <h3>4 · Uncertainty band <span class="next">(next)</span></h3>
+  <h3>4 · Uncertainty band</h3>
   <p>Sample the uncertain inputs (confidence weights, sign-only magnitudes) $M$ times → a coverage band, not a point.
   Sobol indices $S_{T_i}$ say which input drives the band.</p>
 
-  <h3>5 · Optimization <span class="next">(next)</span></h3>
+  <h3>5 · Optimization</h3>
   <p>Trace the benefit-vs-cost Pareto front by ε-constraint (exact, since the system is small):</p>
   <div class="eq">$$\max_{p}\; B(p) \quad\text{s.t.}\quad C(p) \le \varepsilon, \qquad \varepsilon\ \text{swept}$$</div>
 
   <h2>Results</h2>
+
+  <h3>The result</h3>
+  <p>Running the full optimizer: one node — <b>BDNF</b> — is the standout single intervention (#1 in 100% of
+  uncertainty draws), and the benefit–cost front has a sharp knee there. Adding more knobs gives steep diminishing
+  returns, and the top plasticity genes are redundant — so the optimal set is <b>small</b>, not a synergistic drug
+  stack. The finding survives a nonlinear cross-check. <a href="deep-dive.html" style="color:#7fa8f0;text-decoration:none">Full write-up →</a></p>
 
   <h3>Substrate</h3>
   <p>280 nodes in four layers — 70 intervention (knobs), 15 input, 6 readout, 2 trap, 187 bounded expansion — wired by
