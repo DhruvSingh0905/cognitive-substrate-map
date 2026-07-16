@@ -26,10 +26,11 @@ GREEN, RED, GREY, GOLD = "#4caf7d", "#e15759", "#7b8494", "#e8c468"
 
 def montecarlo_bands(edges, nodes, target_rows, M=2000, seed=0, alpha=0.15):
     rng = np.random.default_rng(seed)
+    from cognitive_map.engine.candidates import constrained_knobs
     scored = [r for r in target_rows if r["w"] > 0]
     w_lo = np.array([r["w_lo"] for r in scored]); w_hi = np.array([r["w_hi"] for r in scored])
-    present = set(nodes)
-    knobs = [r for r in target_rows if r["role"] == "knob" and r["d"] != 0 and r["gene"] in present]
+    keepset = set(constrained_knobs(target_rows)[0])
+    knobs = [r for r in target_rows if r["gene"] in keepset]
     # per-knob downstream benefit contribution to each scored target (self excluded)
     B = np.zeros((len(knobs), len(scored)))
     for ki, kr in enumerate(knobs):

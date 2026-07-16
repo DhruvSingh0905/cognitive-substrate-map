@@ -23,3 +23,9 @@ def test_cost_effort_plus_offtarget():
     p = {"A": 1.0}
     x = {"A": 0.15, "B": 0.02, "Z": 0.03}       # Z is off-target
     assert abs(ob.cost(p, x, {"A", "B"}, gamma=1.0) - 1.03) < 1e-9   # |p|=1 + 1*|x_Z|
+
+
+def test_cost_homeostatic_penalizes_defended_nodes():
+    p, x = {"A": 1.0}, {"A": 0.1}
+    assert abs(ob.cost(p, x, {"A"}) - 1.0) < 1e-9                     # no in-degree → base effort
+    assert abs(ob.cost(p, x, {"A"}, indeg={"A": 20}, eta=0.1) - 3.0) < 1e-9   # 1·(1+0.1·20)

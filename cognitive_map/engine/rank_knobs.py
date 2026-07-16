@@ -29,10 +29,9 @@ def compute():
 CAVEATS = [
     "<b>Downstream benefit is the leverage signal.</b> It excludes the knob's own move, so it answers "
     "\"what does pushing this gene do to <i>everything else</i>?\" B_total adds the knob's own ~0.15.",
-    "<b>Zeros are graph sinks.</b> Many end-effectors (receptors/channels: GRIN1, GRIA1, ADCY1, CHAT…) have "
-    "few or no <i>out</i>-edges in the regulatory graph, so pushing them can't cascade. This is partly the real "
-    "story (upstream drivers have leverage, effectors don't) and partly a data limit — OmniPath edges don't encode "
-    "receptor→second-messenger flux.",
+    "<b>Constrained to un-defended drivers.</b> Candidates are limited to druggable knobs that can cascade "
+    "(out-degree&gt;0) and aren't defended hubs (in-degree ≤ 10). Defended convergence nodes like BDNF and CREB1 are "
+    "excluded — they're targets we move <i>indirectly</i>, not levers we push directly (homeostasis fights that).",
     "<b>Negatives are real anti-signals.</b> CHRNA7 and the glial NF-κB genes move scored targets the <i>wrong</i> way "
     "downstream — pushing them hurts the state.",
     "<b>This is pre-uncertainty and single-knob.</b> No confidence band yet (Stage 4) and no combinations (Stage 5); "
@@ -71,8 +70,8 @@ th{{color:var(--muted);font-weight:600}} .rk{{color:var(--muted);width:26px}} .g
 .sink{{background:rgba(123,132,148,.2);color:#9aa3b2;font-size:10px;padding:1px 5px;border-radius:4px}}
 </style></head><body><div class="wrap">
 <h1>Single-knob importance ranking</h1>
-<p class="sub">First result. Each actionable knob pushed in its target direction; ranked by <b>downstream benefit</b> (effect on the rest of the target state). {len(rank)} candidates.</p>
-<div class="lead"><b>{top['gene']}</b> is the standout — pushing it up gives <b>{top['B_downstream']:+.4f}</b> downstream benefit, ~5× the next knob. The cAMP→CREB→CaMKII plasticity cluster follows; end-effectors and inflammation genes sit at zero or negative.</div>
+<p class="sub">Each <b>un-defended upstream driver</b> (constrained set) pushed in its target direction; ranked by downstream benefit. {len(rank)} candidates.</p>
+<div class="lead"><b>{top['gene']}</b> is the top un-defended upstream driver, with <b>{top['B_downstream']:+.4f}</b> downstream benefit. Benefit is modest — the un-defended drivers have less reach than the defended hubs (BDNF, CREB1) we deliberately don't push directly.</div>
 <h2>How to read this</h2>
 <div class="find"><ul>{cav}</ul></div>
 <h2>Ranking</h2>

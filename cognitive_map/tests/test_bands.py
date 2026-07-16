@@ -14,4 +14,4 @@ def test_band_invariants():
     for b in res:
         assert b["lo"] <= b["median"] <= b["hi"]        # band brackets the median
     assert abs(sum(b["p_top"] for b in res) - 1.0) < 1e-9   # exactly one #1 per draw
-    assert res[0]["gene"] == "BDNF"                      # matches the deterministic top
+    assert res[0]["gene"] == "CAMK2B"                    # top of the constrained (un-defended driver) set

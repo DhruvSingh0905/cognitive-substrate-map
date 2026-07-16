@@ -66,9 +66,10 @@
     random-walk-with-restart<sup><a href="#r4">[4]</a></sup>, and use control theory<sup><a href="#r9">[9]</a></sup> to
     ask what the network can even be steered to. The scoring objective, the uncertainty
     analysis<sup><a href="#r12">[12]</a></sup>, and the optimizer<sup><a href="#r15">[15]</a></sup> now run end to end.
-    The result: one high-leverage node — <strong>BDNF</strong> — stands out, with a <em>small</em> optimal set and
-    sharp diminishing returns rather than any synergistic drug stack, and the finding holds under a nonlinear
-    cross-check. What's built is checked by comparing predicted signs against curated edges (8/8). The output is a
+    Crucially, the optimizer may only push <em>un-defended upstream drivers</em>, not defended hubs like BDNF (which
+    are moved indirectly). The result: <strong>CAMK2B</strong> is the standout single lever, with a <em>small</em>
+    optimal set and steep diminishing returns rather than a synergistic stack; the benefit is modest and honest, and it
+    holds under a nonlinear cross-check. What's built is checked against curated edges (8/8). The output is a
     <em>ranking</em> of interventions and a trade-off map — not fold-change predictions, and not a protocol.</p>
   </div>
   <hr class="rule">
@@ -198,22 +199,26 @@
   <p>A plain weighted sum, $\max_p B(p)-\lambda C(p)$, would quietly skip part of the curve when it bends the wrong way
   (a non-convex front)<sup><a href="#r16">[16]</a>,<a href="#r17">[17]</a></sup>; ε-constraint doesn't, and the small
   size makes it cheap to run.</p>
-  <p><strong>Result.</strong> Scoring every actionable knob (pushed in its target direction, and counting only the
-  <em>downstream</em> effect so a gene isn't just credited for moving itself), one gene stands out: pushing
-  <strong>BDNF</strong> up gives roughly 5× the downstream benefit of the next-best knob. Under the confidence-weight
-  uncertainty of §6, it is the #1 knob in <em>100%</em> of 2,000 draws, with a narrow band — the ranking rests on
-  high-confidence targets, not shaky ones.</p>
+  <p><strong>A necessary constraint.</strong> The optimizer may only <em>push</em> un-defended upstream drivers —
+  nodes that cascade (out-degree&nbsp;&gt;&nbsp;0) but aren't heavily regulated (low in-degree). Defended convergence
+  hubs like BDNF and CREB1 are <em>excluded</em> from the push set: they have many regulators (BDNF has 15) that fight
+  a direct push — homeostasis — so we treat them as targets we move <em>indirectly</em>, not levers we pull. (The
+  Liu–Barabási driver <em>set</em> is non-unique, so we use the deterministic in-degree criterion instead.)</p>
+  <p><strong>Result.</strong> Among the un-defended drivers, counting only the <em>downstream</em> effect (so a gene
+  isn't credited for moving itself), <strong>CAMK2B</strong> (CaMKIIβ, in-degree 0) is the top single lever — #1 in
+  <em>100%</em> of the 2,000 uncertainty draws, and it holds #1 under the nonlinear cross-check (§8). The benefit is
+  <em>modest</em>: un-defended drivers reach less of the network than the defended hubs we deliberately can't push —
+  which is the honest, un-inflated answer.</p>
   <figure><span class="frame"><img src="assets/knob_bands.png" alt="knob ranking with confidence bands"></span>
-    <figcaption><span class="fn">Figure 6.</span> Single-knob ranking by downstream benefit, with 10–90% confidence
-    bands. BDNF is decisively #1; the remaining knobs sit near zero.</figcaption></figure>
-  <p>Searching combinations (all singles, pairs and triples plus a greedy path), the benefit–cost front has a
-  <strong>sharp knee at BDNF</strong>: it captures most of the achievable downstream benefit at low cost, and adding
-  more knobs gives steep diminishing returns. The top plasticity knobs are <em>redundant</em> — they feed overlapping
-  downstream — so there is no synergistic stack, and the optimal set is small. Most combinations sit at or below zero
-  benefit; the useful ones are a thin envelope.</p>
+    <figcaption><span class="fn">Figure 6.</span> Single-knob ranking of the constrained (un-defended driver) set by
+    downstream benefit, with 10–90% confidence bands. CAMK2B leads.</figcaption></figure>
+  <p>Searching combinations, the benefit–cost front has a <strong>knee at CAMK2B</strong> followed by steep
+  diminishing returns — adding CAMK2A / NTRK2 / CDC42 buys a little more benefit at rising cost. The drivers act on
+  largely independent downstream, so combinations are roughly additive (no synergistic stack), and the optimal set is
+  small.</p>
   <figure><span class="frame"><img src="assets/pareto_front.png" alt="benefit-cost Pareto front"></span>
-    <figcaption><span class="fn">Figure 7.</span> Benefit–cost Pareto front over knob combinations. The near-vertical
-    jump to BDNF followed by a flat plateau is the diminishing-returns signature — polypharmacy doesn't pay here.</figcaption></figure>
+    <figcaption><span class="fn">Figure 7.</span> Benefit–cost Pareto front over combinations of the constrained
+    drivers. A small set (CAMK2B, then +CAMK2A) sits at the knee.</figcaption></figure>
 
   <h2>8. Validation</h2>
   <p>The engine is test-driven throughout — each stage is gated by unit tests (sign propagation, the resolvent, the
@@ -237,13 +242,13 @@
   CREB1's ~40 out-edges split its signal while BDNF's single out-edge passes it straight through — exactly what
   equation (2) predicts.</p>
   <h3>Nonlinear cross-check</h3>
-  <p>The whole engine is linear, so the headline (§7) could be an artifact of that. We re-ran the ranking under a
-  <em>saturating</em> (tanh) propagation and pushed knobs progressively harder into the nonlinear regime, where the
-  linear approximation is meant to break. <strong>BDNF stays #1 at every strength</strong> — its lead actually widens
-  as the system saturates — and combinations stay roughly additive, so no synergy appears. The finding survives.</p>
+  <p>The whole engine is linear, so the headline (§7) could be an artifact of that. We re-ran the constrained ranking
+  under a <em>saturating</em> (tanh) propagation and pushed knobs progressively harder into the nonlinear regime, where
+  the linear approximation is meant to break. <strong>CAMK2B stays #1 at every strength</strong> — its lead widens as
+  the system saturates — and combinations stay roughly additive, so no synergy appears. The finding survives.</p>
   <figure><span class="frame"><img src="assets/pressure_test.png" alt="nonlinear pressure test"></span>
     <figcaption><span class="fn">Figure 9.</span> Downstream benefit vs. perturbation strength under the saturating
-    map. BDNF's lead grows as the push saturates — the result is not a linearity artifact.</figcaption></figure>
+    map. CAMK2B's lead grows as the push saturates — the result is not a linearity artifact.</figcaption></figure>
 
   <h2>9. Groundedness and assumptions</h2>
   <p>The layers rest on different evidence: brain-scoping is computed, edge signs are curated from causal databases,

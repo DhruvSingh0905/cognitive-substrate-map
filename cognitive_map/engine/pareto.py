@@ -23,29 +23,31 @@ GREEN, GOLD, GREY = "#4caf7d", "#e8c468", "#7b8494"
 
 
 def single_knob_responses(edges, nodes, rows, alpha=0.15):
-    present = set(nodes)
-    knobs = [r for r in rows if r["role"] == "knob" and r["d"] != 0 and r["gene"] in present]
+    from cognitive_map.engine.candidates import constrained_knobs
+    keep, indeg = constrained_knobs(rows)
+    keepset = set(keep)
+    knobs = [r for r in rows if r["gene"] in keepset]
     resp = {r["gene"]: (r["d"], pr.steady_state(edges, nodes, {r["gene"]: r["d"]}, alpha=alpha))
             for r in knobs}
-    return list(resp), resp
+    return list(resp), resp, indeg
 
 
-def eval_set(S, resp, rows, target_genes, gamma=1.0):
+def eval_set(S, resp, rows, target_genes, indeg=None, gamma=1.0):
     x = {}
     for k in S:
         for g, v in resp[k][1].items():
             x[g] = x.get(g, 0.0) + v
     B = ob.aggregate_benefit(x, rows, exclude=set(S))   # DOWNSTREAM benefit — exclude the pushed knobs
     p = {k: resp[k][0] for k in S}
-    return B, ob.cost(p, x, target_genes, gamma=gamma)
+    return B, ob.cost(p, x, target_genes, indeg=indeg, gamma=gamma)
 
 
-def greedy_forward(genes, resp, rows, target_genes, max_size=16, gamma=1.0):
+def greedy_forward(genes, resp, rows, target_genes, indeg=None, max_size=16, gamma=1.0):
     S, path, cur_B, remaining = [], [], 0.0, set(genes)
     for _ in range(min(max_size, len(genes))):
         best = None
         for k in remaining:
-            B, C = eval_set(S + [k], resp, rows, target_genes, gamma)
+            B, C = eval_set(S + [k], resp, rows, target_genes, indeg, gamma)
             if best is None or B > best[1]:
                 best = (k, B, C)
         k, B, C = best
@@ -56,11 +58,11 @@ def greedy_forward(genes, resp, rows, target_genes, max_size=16, gamma=1.0):
     return path
 
 
-def brute_combos(genes, resp, rows, target_genes, sizes=(1, 2, 3), gamma=1.0):
+def brute_combos(genes, resp, rows, target_genes, indeg=None, sizes=(1, 2, 3), gamma=1.0):
     out = []
     for s in sizes:
         for combo in itertools.combinations(genes, s):
-            B, C = eval_set(combo, resp, rows, target_genes, gamma)
+            B, C = eval_set(combo, resp, rows, target_genes, indeg, gamma)
             out.append({"S": combo, "size": s, "benefit": B, "cost": C})
     return out
 
@@ -147,10 +149,10 @@ def main():
     nodes = pd.read_csv(OUT / "nodes.csv"); edges = pd.read_csv(OUT / "edges_regulatory.csv")
     node_list = nodes["gene"].astype(str).tolist()
     rows = build_target()
-    genes, resp = single_knob_responses(edges, node_list, rows)
+    genes, resp, indeg = single_knob_responses(edges, node_list, rows)
     target_genes = {r["gene"] for r in rows}
-    pts = brute_combos(genes, resp, rows, target_genes, sizes=(1, 2, 3))
-    pts += greedy_forward(genes, resp, rows, target_genes)
+    pts = brute_combos(genes, resp, rows, target_genes, indeg, sizes=(1, 2, 3))
+    pts += greedy_forward(genes, resp, rows, target_genes, indeg)
     # dedup by set
     seen, uniq = set(), []
     for p in pts:
