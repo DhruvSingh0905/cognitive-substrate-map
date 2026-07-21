@@ -42,6 +42,7 @@
   thead th{border-top:1.5px solid #999;border-bottom:1.5px solid #999}
   tbody tr:last-child td{border-bottom:1.5px solid #999}
   .mono{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:13px} .ok{color:#2f7d4f}
+  ul.lim{font-size:14.5px;line-height:1.5;padding-left:22px;margin:8px 0} ul.lim li{margin:5px 0;text-align:left}
   .refs{font-size:13.5px;line-height:1.5} .refs ol{padding-left:26px;margin:8px 0} .refs li{margin:5px 0;text-align:left}
   .foot{color:var(--muted);font-size:13px;margin-top:26px;border-top:1px solid var(--line);padding-top:14px;text-align:center}
   @media(max-width:640px){.paper{padding:34px 22px}}
@@ -52,10 +53,11 @@
   <p class="authors">Dhruv Singh</p>
   <p class="meta">Work in progress · a personal project · July 2026 · code at github.com/DhruvSingh0905/cognitive-substrate-map</p>
 
-  <div class="status"><strong>Status — core pipeline complete (work in progress).</strong> This is a personal
-  learning project, not a finished or peer-reviewed paper. The full chain now runs end to end — substrate, propagation,
-  controllability, objective, uncertainty, and optimizer — with a first result (§7) that survives a nonlinear
-  cross-check (§8). Refinement continues; feedback very welcome.</div>
+  <div class="status"><strong>Status — a math experiment, not a research contribution.</strong> Nothing here is novel.
+  Every method is off-the-shelf, applied to a public knowledge graph as a way to learn the machinery. The full chain
+  does run end to end — substrate, propagation, controllability, objective, uncertainty, optimizer — and the result
+  (§7) survives a nonlinear cross-check (§8), but it is a <em>model exercise</em>, not a finding anyone should act on.
+  Personal project, not peer-reviewed. Feedback welcome.</div>
 
   <div class="abstract">
     <p><span class="h">Overview.</span> This project treats a biomedical knowledge graph as a signed, directed control
@@ -71,6 +73,11 @@
     optimal set and steep diminishing returns rather than a synergistic stack; the benefit is modest and honest, and it
     holds under a nonlinear cross-check. What's built is checked against curated edges (8/8). The output is a
     <em>ranking</em> of interventions and a trade-off map — not fold-change predictions, and not a protocol.</p>
+    <p><span class="h">What this is not.</span> A contribution. The methods are all standard — Personalized PageRank,
+    Liu–Barabási controllability, ε-constraint Pareto, Monte-Carlo uncertainty — and the inputs are weak: a sparse,
+    sign-only graph and a hand-built target vector. The interesting part is the <em>plumbing</em> — wiring those
+    pieces together honestly and seeing what falls out — not the answer it produces. Treat every number here as an
+    exercise, not evidence.</p>
   </div>
   <hr class="rule">
 
@@ -154,6 +161,25 @@
     <tr><td>feedback component (SCC)</td><td class="mono">200</td></tr>
     </tbody>
   </table>
+  <h3>Formal target controllability</h3>
+  <p>"You can steer the readouts" was an assumption above. The actual test: with outputs $y=Cx$ selecting the scored
+  targets $S$, that set is fully controllable iff the target-controllability matrix has full row
+  rank<sup><a href="#r11">[11]</a></sup>:</p>
+  <div class="eqwrap">$$\operatorname{rank}\bigl[\,CB,\ C\hat{W}B,\ C\hat{W}^{2}B,\ \dots\,\bigr]\;=\;|S|$$</div>
+  <p class="gloss"><span class="h">In words —</span> count how many independent directions of the target state your
+  inputs can actually reach. Fewer than $|S|$ means you can push it along a subspace, but not drive it anywhere you like.</p>
+  <p>Against the 78 scored targets present in the graph:</p>
+  <table><caption><span class="fn">Table 2.</span> Independently steerable target dimensions.</caption>
+    <thead><tr><th>input set</th><th>inputs</th><th>rank / |S|</th><th>coverage</th></tr></thead>
+    <tbody>
+    <tr><td>constrained drivers (un-defended, §7)</td><td class="mono">7</td><td class="mono">72 / 78</td><td class="mono">92%</td></tr>
+    <tr><td>all druggable knobs (unconstrained)</td><td class="mono">24</td><td class="mono">73 / 78</td><td class="mono">94%</td></tr>
+    <tr><td>every node (graph ceiling)</td><td class="mono">280</td><td class="mono">78 / 78</td><td class="mono">100%</td></tr>
+    </tbody>
+  </table>
+  <p>The seven un-defended drivers span <strong>92%</strong> of the target space — they steer it rather than merely
+  nudge it. And refusing to push the defended hubs costs just <em>one</em> dimension (92% vs 94%), so the constraint
+  in §7 is nearly free. (Within the model, of course — the graph is the graph.)</p>
 
   <h2>5. Target state and objective</h2>
   <p>The target is a vector $d$ of desired changes. The key fact: most brain variables aren't "more is better" — they
@@ -212,9 +238,24 @@
   <figure><span class="frame"><img src="assets/knob_bands.png" alt="knob ranking with confidence bands"></span>
     <figcaption><span class="fn">Figure 6.</span> Single-knob ranking of the constrained (un-defended driver) set by
     downstream benefit, with 10–90% confidence bands. CAMK2B leads.</figcaption></figure>
-  <p>Searching combinations, the benefit–cost front has a <strong>knee at CAMK2B</strong> followed by steep
-  diminishing returns — adding CAMK2A / NTRK2 / CDC42 buys a little more benefit at rising cost. The drivers act on
-  largely independent downstream, so combinations are roughly additive (no synergistic stack), and the optimal set is
+  <p>For combinations, the constrained set is small enough that no heuristic is needed: all $2^{7}-1=127$ subsets are
+  evaluated <strong>exhaustively</strong>, so the front below is provably optimal within the constraint — not a greedy
+  approximation that might have missed a better set. (Greedy forward selection is still run as a cross-check; it lands
+  on the front but misses one point, which is the reason to prefer the exhaustive sweep while it stays cheap.)</p>
+  <table><caption><span class="fn">Table 3.</span> The exhaustive Pareto front — 6 of 127 subsets are non-dominated.</caption>
+    <thead><tr><th>#</th><th>knob set</th><th>benefit</th><th>cost</th></tr></thead>
+    <tbody>
+    <tr><td class="mono">1</td><td class="mono">CAMK2B</td><td class="mono">+0.0172</td><td class="mono">1.12</td></tr>
+    <tr><td class="mono">2</td><td class="mono">CAMK2A + CAMK2B</td><td class="mono">+0.0285</td><td class="mono">2.80</td></tr>
+    <tr><td class="mono">3</td><td class="mono">NTRK2 + CAMK2A + CAMK2B</td><td class="mono">+0.0345</td><td class="mono">4.61</td></tr>
+    <tr><td class="mono">4</td><td class="mono">NTRK2 + CAMK2A + CAMK2B + HRAS</td><td class="mono">+0.0370</td><td class="mono">6.57</td></tr>
+    <tr><td class="mono">5</td><td class="mono">NTRK2 + CAMK2A + CAMK2B + CDC42</td><td class="mono">+0.0383</td><td class="mono">6.68</td></tr>
+    <tr><td class="mono">6</td><td class="mono">NTRK2 + CAMK2A + CAMK2B + CDC42 + HRAS</td><td class="mono">+0.0409</td><td class="mono">8.64</td></tr>
+    </tbody>
+  </table>
+  <p>The <strong>knee is CAMK2B</strong> alone — best benefit per unit cost — followed by steep diminishing returns:
+  the last four points buy roughly twice the benefit for roughly eight times the cost. The drivers act on largely
+  independent downstream, so combinations are close to additive (no synergistic stack), and the efficient set stays
   small.</p>
   <figure><span class="frame"><img src="assets/pareto_front.png" alt="benefit-cost Pareto front"></span>
     <figcaption><span class="fn">Figure 7.</span> Benefit–cost Pareto front over combinations of the constrained
@@ -228,7 +269,7 @@
   <figure><span class="frame"><img src="assets/fig_signcheck.png" alt="sign check"></span>
     <figcaption><span class="fn">Figure 8.</span> Perturb a gene, read the response at a target: green is up, red is
     down, and each bar's label is the edge sign it should match. All eight agree, including two-hop sign flips.</figcaption></figure>
-  <table><caption><span class="fn">Table 2.</span> Sign consistency: unit perturbation vs. curated edge sign.</caption>
+  <table><caption><span class="fn">Table 4.</span> Sign consistency: unit perturbation vs. curated edge sign.</caption>
     <thead><tr><th>perturb</th><th>→ target</th><th>edge</th><th>$x^{*}$</th><th>check</th></tr></thead>
     <tbody>
     <tr><td class="mono">CREB1 ↑</td><td>BDNF</td><td>+1</td><td class="mono">+0.0030</td><td class="ok">✓</td></tr>
@@ -251,17 +292,36 @@
     map. CAMK2B's lead grows as the push saturates — the result is not a linearity artifact.</figcaption></figure>
 
   <h2>9. Groundedness and assumptions</h2>
-  <p>The layers rest on different evidence: brain-scoping is computed, edge signs are curated from causal databases,
-  edge strengths are mostly sign-only, and the target vector is hand-built. And $\hat W$ is a linear (first-order)
-  stand-in for nonlinear biology, so the results hold for small nudges near the resting state, not big ones. So the
-  output is an ordered list of interventions and a trade-off map — not exact fold-changes, and not medical advice.</p>
+  <p>The layers rest on very different evidence: brain-scoping is computed, edge signs are curated from causal
+  databases, edge strengths are mostly sign-only, and the target vector is hand-built by me. $\hat W$ is a linear
+  (first-order) stand-in for nonlinear biology, so results hold for small nudges near the resting state, not big ones.
+  Everything above is internally consistent and tested; none of it is externally validated.</p>
+  <p>Concretely, the result "CAMK2B is the best lever" is a statement about <em>this graph under this objective</em>.
+  For it to mean anything about an actual brain, all of the following would have to hold — and I have checked none
+  of them:</p>
+  <ul class="lim">
+    <li>the edge set is roughly complete for this subsystem (it isn't — the graph is sparse, and absent edges are
+      indistinguishable from absent biology)</li>
+    <li>sign-only weights are a fair stand-in for real interaction strengths</li>
+    <li>the hand-built target vector actually describes a learning-optimal state, rather than my reading of it</li>
+    <li>a "push" on a gene corresponds to something a real intervention does — dose, timing, tissue, and
+      compensation are all outside the model</li>
+    <li>nothing important is missing that isn't a gene: metabolism, circuit dynamics, glia, and everything
+      downstream of transcription</li>
+  </ul>
+  <p>So the honest output is an <em>ordered list under stated assumptions</em> and a trade-off map — not fold-changes,
+  not predictions, and emphatically not medical advice. The value of the exercise is the machinery, not the answer:
+  a working pipeline from public graph to constrained, uncertainty-quantified, provably-optimal-within-the-constraint
+  intervention sets. Point it at a better graph and a validated target vector and the same code would be worth
+  something. As it stands it's a math experiment that happens to be about neurons.</p>
 
   <h2>10. Status &amp; roadmap</h2>
   <p><strong>Built, tested, and run:</strong> the full pipeline — substrate (§1), operator and RWR engine (§2–3),
-  controllability (§4), the set-point objective (§5), the uncertainty pass (§6), the ε-constraint optimizer (§7), and
-  the nonlinear cross-check (§8). <strong>Further out:</strong> fitting real edge strengths where measured data exists,
-  a richer intervention model (dose, timing), and validation against real perturbation datasets. This is a living
-  write-up; it will change as those pieces land.</p>
+  structural <em>and</em> formal target controllability (§4), the set-point objective (§5), the uncertainty pass (§6),
+  the constrained ε-constraint optimizer over an exhaustive combination sweep (§7), and the nonlinear cross-check (§8).
+  <strong>Further out:</strong> fitting real edge strengths where measured data exists, a richer intervention model
+  (dose, timing), and validation against real perturbation datasets — the last of which is the only thing that would
+  turn any of this from an exercise into evidence. This is a living write-up; it will change as those pieces land.</p>
 
   <hr class="rule">
   <h2>References</h2>

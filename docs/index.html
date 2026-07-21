@@ -33,6 +33,12 @@
   up/down-regulations move the brain toward a learning-optimal state at minimal systemic cost.</p>
   <p style="margin:0 0 6px"><a href="deep-dive.html" style="color:#7fa8f0;text-decoration:none">→ Read the detailed math write-up</a></p>
 
+  <div class="note"><b>A math experiment — not a research contribution.</b> Nothing here is novel: every method is
+  off-the-shelf (Personalized PageRank, Liu–Barabási controllability, ε-constraint Pareto, Monte-Carlo uncertainty),
+  applied to a public knowledge graph as a way to learn the machinery. Work in progress, not peer-reviewed, with no
+  experimental validation of any kind. Every number below is an exercise, not evidence — and none of it is medical
+  advice.</div>
+
   <h2>The math</h2>
 
   <h3>1 · Substrate → signed operator</h3>
@@ -71,7 +77,9 @@
   <p>The optimizer is restricted to pushing <b>un-defended upstream drivers</b> — not defended hubs like BDNF (which
   are moved indirectly, since their many regulators fight a direct push). Under that constraint, <b>CAMK2B</b> is the
   standout single lever (#1 in 100% of uncertainty draws), with a <b>small</b> optimal set and steep diminishing
-  returns rather than a synergistic stack. The benefit is modest and honest, and it survives a nonlinear cross-check.
+  returns rather than a synergistic stack. All $2^7-1=127$ subsets are searched exhaustively, so the 6-point front is
+  provably optimal within the constraint; the benefit is modest, and it survives a nonlinear cross-check. That is a
+  statement about <i>this graph under this objective</i> — not about a brain.
   <a href="deep-dive.html" style="color:#7fa8f0;text-decoration:none">Full write-up →</a></p>
 
   <h3>Substrate</h3>
@@ -81,7 +89,10 @@
 
   <h3>Controllability</h3>
   <p>All 280 nodes are reachable from the druggable set. Arbitrary-state control would need 81 independent drivers
-  (~35 druggable), but <b>target-control of the cognitive core is plausible</b> — all the optimizer needs.</p>
+  (~35 druggable) — but you don't need arbitrary control, only control of the scored targets. Formally:
+  $\operatorname{rank}[\,CB, C\hat{W}B, C\hat{W}^2B, \dots] = 72$ of $|S|=78$, so the seven un-defended drivers span
+  <b>92%</b> of the target space. Dropping the defended hubs from the push set costs just <b>one</b> dimension
+  (92% vs 94% unconstrained) — the constraint is nearly free.</p>
 
   <h3>Propagation — verified against the raw edge signs</h3>
   <p>Perturb one gene $+1$, solve $x^{*}$, check against signs read straight from the edge table (not the model). At

@@ -58,7 +58,10 @@ def greedy_forward(genes, resp, rows, target_genes, indeg=None, max_size=16, gam
     return path
 
 
-def brute_combos(genes, resp, rows, target_genes, indeg=None, sizes=(1, 2, 3), gamma=1.0):
+def brute_combos(genes, resp, rows, target_genes, indeg=None, sizes=None, gamma=1.0):
+    """Exhaustive by default: every non-empty subset, so the front is provably optimal."""
+    if sizes is None:
+        sizes = range(1, len(genes) + 1)
     out = []
     for s in sizes:
         for combo in itertools.combinations(genes, s):
@@ -151,8 +154,8 @@ def main():
     rows = build_target()
     genes, resp, indeg = single_knob_responses(edges, node_list, rows)
     target_genes = {r["gene"] for r in rows}
-    pts = brute_combos(genes, resp, rows, target_genes, indeg, sizes=(1, 2, 3))
-    pts += greedy_forward(genes, resp, rows, target_genes, indeg)
+    pts = brute_combos(genes, resp, rows, target_genes, indeg)      # exhaustive: all 2^n − 1 subsets
+    pts += greedy_forward(genes, resp, rows, target_genes, indeg)   # cross-check (should be dominated)
     # dedup by set
     seen, uniq = set(), []
     for p in pts:

@@ -2,9 +2,11 @@
 
 **Dhruv Singh** · Work in progress · a personal project · July 2026
 
-> ⚠️ **Status — core pipeline complete (work in progress).** A personal learning project, not peer-reviewed. The full chain now runs end to end — substrate, propagation, controllability, objective, uncertainty, optimizer — with a first result (§7) that survives a nonlinear cross-check (§8). Refinement continues; feedback welcome.
+> ⚠️ **Status — a math experiment, not a research contribution.** Nothing here is novel. Every method is off-the-shelf, applied to a public knowledge graph as a way to learn the machinery. A personal learning project, not peer-reviewed, with no experimental validation of any kind. The full chain runs end to end — substrate, propagation, controllability, objective, uncertainty, optimizer — with a first result (§7) that survives a nonlinear cross-check (§8), but it is a *model exercise*, not a finding anyone should act on. Refinement continues; feedback welcome.
 
 > **Overview.** This project treats a biomedical knowledge graph as a signed, directed control system and asks a simple question with a hard answer: which genes would you nudge, and by how much, to move the brain toward a state that's good for learning — without disturbing everything else? The scoring objective, uncertainty pass, and optimizer now run end to end — restricted to pushing **un-defended upstream drivers**, not defended hubs like BDNF (moved indirectly). The result: **CAMK2B** is the standout single lever, with a small optimal set and steep diminishing returns rather than a synergistic stack; the benefit is modest and honest, and it holds under a nonlinear cross-check.
+
+> **What this is not.** A contribution. The methods are all standard — Personalized PageRank, Liu–Barabási controllability, ε-constraint Pareto, Monte-Carlo uncertainty — and the inputs are weak: a sparse, sign-only graph and a hand-built target vector. The interesting part is the *plumbing*: wiring those pieces into one pipeline that stays honest about what it doesn't know. Treat every number here as an exercise, not evidence.
 
 *Academic-styled HTML version: [deep-dive.html](deep-dive.html)*
 
@@ -78,6 +80,24 @@ Matching via Hopcroft–Karp [10]. Result: all 280 reachable, but full control n
 | drivers druggable | 37 / 81 |
 | feedback SCC | 200 |
 
+### Formal target controllability
+
+"You can steer the readouts" was an assumption above. The actual test: with outputs $y=Cx$ selecting the scored targets $S$, that set is fully controllable iff the target-controllability matrix has full row rank [11]:
+
+$$\operatorname{rank}\bigl[\,CB,\ C\hat{W}B,\ C\hat{W}^{2}B,\ \dots\,\bigr]\;=\;|S|$$
+
+*In words —* count how many independent directions of the target state your inputs can actually reach. Fewer than $|S|$ means you can push it along a subspace, but not drive it anywhere you like.
+
+Against the 78 scored targets present in the graph:
+
+| input set | inputs | rank / \|S\| | coverage |
+|---|---|---|---|
+| constrained drivers (un-defended, §7) | 7 | 72 / 78 | 92% |
+| all druggable knobs (unconstrained) | 24 | 73 / 78 | 94% |
+| every node (graph ceiling) | 280 | 78 / 78 | 100% |
+
+The seven un-defended drivers span **92%** of the target space — they steer it rather than merely nudge it. And refusing to push the defended hubs costs just *one* dimension (92% vs 94%), so the constraint in §7 is nearly free. (Within the model, of course — the graph is the graph.)
+
 ## 5. Target state and objective
 
 The target is a vector $d$ of desired changes. Key fact: most brain variables have a sweet spot, an inverted-U (Yerkes–Dodson [18]; Arnsten [19]) — dopamine, arousal, cortisol, E/I balance, mTOR. Benefit is how much closer to the target you get:
@@ -128,7 +148,18 @@ A plain weighted sum would quietly skip part of the curve when it bends the wron
 
 ![Figure 6 — single-knob ranking with confidence bands](assets/knob_bands.png)
 
-Searching combinations, the benefit–cost front has a **knee at CAMK2B**, then steep diminishing returns — adding CAMK2A / NTRK2 / CDC42 buys a little more at rising cost. The drivers act on largely independent downstream, so combinations are roughly additive (no synergistic stack); the optimal set is small.
+For combinations, the constrained set is small enough that no heuristic is needed: all $2^{7}-1=127$ subsets are evaluated **exhaustively**, so the front below is provably optimal within the constraint — not a greedy approximation that might have missed a better set. (Greedy forward selection is still run as a cross-check; it lands on the front but misses one point, which is the reason to prefer the exhaustive sweep while it stays cheap.)
+
+| # | knob set | benefit | cost |
+|---|---|---|---|
+| 1 | CAMK2B | +0.0172 | 1.12 |
+| 2 | CAMK2A + CAMK2B | +0.0285 | 2.80 |
+| 3 | NTRK2 + CAMK2A + CAMK2B | +0.0345 | 4.61 |
+| 4 | NTRK2 + CAMK2A + CAMK2B + HRAS | +0.0370 | 6.57 |
+| 5 | NTRK2 + CAMK2A + CAMK2B + CDC42 | +0.0383 | 6.68 |
+| 6 | NTRK2 + CAMK2A + CAMK2B + CDC42 + HRAS | +0.0409 | 8.64 |
+
+The **knee is CAMK2B** alone — best benefit per unit cost — then steep diminishing returns: the last four points buy roughly twice the benefit for roughly eight times the cost. The drivers act on largely independent downstream, so combinations are close to additive (no synergistic stack); the efficient set stays small.
 
 ![Figure 7 — benefit–cost Pareto front](assets/pareto_front.png)
 
@@ -154,11 +185,21 @@ One nice check: two-hop `NTRK2` moves more than one-hop `BDNF`, because CREB1's 
 
 ## 9. Groundedness and assumptions
 
-The layers rest on different evidence: brain-scoping is computed, edge signs are curated, edge strengths are mostly sign-only, and the target vector is hand-built. $\hat W$ is a linear (first-order) stand-in for nonlinear biology, so results hold for small nudges near the resting state, not big ones. Output: an ordered list of interventions and a trade-off map — not exact fold-changes, not medical advice.
+The layers rest on very different evidence: brain-scoping is computed, edge signs are curated from causal databases, edge strengths are mostly sign-only, and the target vector is hand-built by me. $\hat W$ is a linear (first-order) stand-in for nonlinear biology, so results hold for small nudges near the resting state, not big ones. Everything above is internally consistent and tested; none of it is externally validated.
+
+Concretely, the result "CAMK2B is the best lever" is a statement about *this graph under this objective*. For it to mean anything about an actual brain, all of the following would have to hold — and I have checked none of them:
+
+- the edge set is roughly complete for this subsystem (it isn't — the graph is sparse, and absent edges are indistinguishable from absent biology)
+- sign-only weights are a fair stand-in for real interaction strengths
+- the hand-built target vector actually describes a learning-optimal state, rather than my reading of it
+- a "push" on a gene corresponds to something a real intervention does — dose, timing, tissue, and compensation are all outside the model
+- nothing important is missing that isn't a gene: metabolism, circuit dynamics, glia, and everything downstream of transcription
+
+So the honest output is an *ordered list under stated assumptions* and a trade-off map — not fold-changes, not predictions, and emphatically not medical advice. The value of the exercise is the machinery, not the answer: a working pipeline from public graph to constrained, uncertainty-quantified, provably-optimal-within-the-constraint intervention sets. Point it at a better graph and a validated target vector and the same code would be worth something. As it stands it's a math experiment that happens to be about neurons.
 
 ## 10. Status & roadmap
 
-**Built, tested, and run:** the full pipeline — substrate (§1), operator + RWR engine (§2–3), controllability (§4), the objective (§5), the uncertainty pass (§6), the ε-constraint optimizer (§7), and the nonlinear cross-check (§8). **Further out:** real edge strengths where measured data exists, a richer intervention model (dose, timing), and validation against real perturbation datasets. A living write-up.
+**Built, tested, and run:** the full pipeline — substrate (§1), operator + RWR engine (§2–3), structural *and* formal target controllability (§4), the objective (§5), the uncertainty pass (§6), the constrained ε-constraint optimizer over an exhaustive combination sweep (§7), and the nonlinear cross-check (§8). **Further out:** real edge strengths where measured data exists, a richer intervention model (dose, timing), and validation against real perturbation datasets — the last of which is the only thing that would turn any of this from an exercise into evidence. A living write-up.
 
 ---
 
